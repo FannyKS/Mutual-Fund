@@ -6,13 +6,14 @@ See [SPECIFICATION.md](SPECIFICATION.md) for the full specification.
 
 ## What it does
 
-Tracks 4 accounts (3 Manulife + 1 TD Canada Trust), computes market value of
-holdings over time (units × NAV × FX rate), and produces:
+Tracks 7 accounts — Fanny (TFSA, RRSP, Non-Reg), KC (RRSP, TFSA),
+Joint (Non-Reg) at Manulife, and TD (Non-Reg) at TD Canada Trust — computes
+market value of holdings over time (units × NAV × FX rate), and produces:
 
 1. **Daily report**
 2. **Weekly report**
 3. **Monthly report**
-4. **Consolidated report** across all 4 accounts
+4. **Consolidated report** across all 7 accounts
 
 Reports are CSV files written to `~/Documents/Mutual-Fund-Reports/`
 (outside `src/`, per the specification), plus an optional terminal summary.
@@ -29,7 +30,7 @@ pip install -e .
 
 | File | Columns | Notes |
 |---|---|---|
-| `accounts.csv` | `account_id,name,institution,currency` | Your 4 accounts |
+| `accounts.csv` | `account_id,name,owner,type,institution,currency` | Your 7 accounts |
 | `transactions.csv` | `date,account_id,fund,action,units,price` | `action` = BUY/SELL |
 | `nav.csv` | `date,fund,nav,currency` | NAV per unit, from your fund company |
 | `fx.csv` | `date,currency,rate` | Rate **to CAD** (e.g. USD→CAD ≈ 1.37). Not needed for CAD-only funds |
@@ -62,8 +63,8 @@ Each report CSV has one row per valuation date with per-account market values
 (in base currency) and a final `CONSOLIDATED_<currency>` column:
 
 ```
-date,Manulife RRSP (M1),Manulife TFSA (M2),Manulife Non-Reg (M3),TD Direct Investing (TD1),CONSOLIDATED_CAD
-2026-07-31,21209.07,7474.77,18686.92,20184.90,67555.66
+date,Fanny TFSA (F-TFSA),Fanny RRSP (F-RRSP),...,TD Non-Reg (TD-NONREG),CONSOLIDATED_CAD
+2026-07-31,10152.14,14903.22,...,33381.47,101238.55
 ```
 
 Weekly reports keep the last valuation date of each ISO week; monthly reports

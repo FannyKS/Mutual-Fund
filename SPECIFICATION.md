@@ -1,16 +1,35 @@
-# Mutual Fund Specification 
-To create a repository for my mutual fund.
-I have 3 accounts with Manulife and 1 account with TD Canada Trust
-I want to have the following reports
+# Mutual Fund Specification
+To create a repository for my mutual fund market value reports.
 
-I will provide the CVS of my holdings
+## Accounts (7 total)
 
-What I need is reports on different accounts like created under the repository 'Finance'
+Manulife (6):
+
+1. Fanny — TFSA
+2. Fanny — RRSP
+3. Fanny — Non-Registered
+4. KC — RRSP
+5. KC — TFSA
+6. Joint (Both) — Non-Registered
+
+TD Canada Trust (1):
+
+7. TD — Non-Registered
+
+Accounts may hold different funds, or the same fund in different accounts.
+
+## Data
+
+I will provide the CSVs of my holdings (accounts, transactions, NAVs, FX rates).
+
+## Reports
+
+Reports on each account, plus a consolidated report across all accounts:
 
 1. Daily report
 2. Weekly report
 3. Monthly report
-
-In addition, a consolidate report for the 4 accounts
+4. Consolidated report (all 7 accounts)
 
 Reports should be written to my computer, not under SRC
+(default: ~/Documents/Mutual-Fund-Reports).

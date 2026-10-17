@@ -1,5 +1,8 @@
-account_id,name,institution,currency
-M1,Manulife RRSP,Manulife,CAD
-M2,Manulife TFSA,Manulife,CAD
-M3,Manulife Non-Reg,Manulife,CAD
-TD1,TD Direct Investing,TD Canada Trust,CAD
+account_id,name,owner,type,institution,currency
+F-TFSA,Fanny TFSA,Fanny,TFSA,Manulife,CAD
+F-RRSP,Fanny RRSP,Fanny,RRSP,Manulife,CAD
+F-NONREG,Fanny Non-Reg,Fanny,Non-Registered,Manulife,CAD
+K-RRSP,KC RRSP,KC,RRSP,Manulife,CAD
+K-TFSA,KC TFSA,KC,TFSA,Manulife,CAD
+J-NONREG,Joint Non-Reg,Joint,Non-Registered,Manulife,CAD
+TD-NONREG,TD Non-Reg,TD,Non-Registered,TD Canada Trust,CAD
