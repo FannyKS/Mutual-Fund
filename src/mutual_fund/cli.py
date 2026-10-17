@@ -19,6 +19,7 @@ from .loader import (
     Transaction,
     append_transaction,
     load_accounts,
+    load_fund_names,
     load_fx,
     load_navs,
     load_snapshot,
@@ -26,6 +27,7 @@ from .loader import (
 )
 from .navfetch import update_navs
 from .fxfetch import update_fx
+from .htmlreport import write_dashboard, write_period_reports
 from .reports import (
     DEFAULT_OUTPUT_DIR,
     print_summary,
@@ -95,6 +97,11 @@ def _cmd_reconcile(args) -> int:
                     account_id=r["account_id"].strip(),
                     fund=r["fund"].strip(),
                     units=float(r["units"]),
+                    cost=(
+                        float(r["cost"])
+                        if (r.get("cost") or "").strip()
+                        else None
+                    ),
                 )
             )
     if not rows:
@@ -133,14 +140,15 @@ def _cmd_reconcile(args) -> int:
         print("\nAll holdings match. Safe to use this snapshot as the new baseline.")
     if args.accept and not mismatches:
         target = args.data / "snapshot.csv"
-        target.write_text(
-            "date,account_id,fund,units\n"
-            + "".join(
-                f"{r.date.isoformat()},{r.account_id},{r.fund},{r.units:.4f}\n"
-                for r in sorted(rows, key=lambda r: (r.account_id, r.fund))
-            ),
-            encoding="utf-8",
-        )
+        existing_cost = {(p.account_id, p.fund): p.cost for p in snapshot}
+        lines = ["date,account_id,fund,units,cost"]
+        for r in sorted(rows, key=lambda r: (r.account_id, r.fund)):
+            cost = r.cost if r.cost is not None else existing_cost.get((r.account_id, r.fund))
+            lines.append(
+                f"{r.date.isoformat()},{r.account_id},{r.fund},{r.units:.4f},"
+                + (f"{cost:.2f}" if cost is not None else "")
+            )
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
         print(f"Snapshot saved to {target}.")
     elif args.accept:
         print("Not saved: fix the differences first (or update the snapshot).")
@@ -170,7 +178,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command")
 
-    rep = sub.add_parser("report", help="Write daily/weekly/monthly CSV reports")
+    rep = sub.add_parser("report", help="Write daily/weekly/monthly reports (CSV + HTML)")
     rep.add_argument(
         "--out",
         type=Path,
@@ -184,6 +192,11 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         metavar="YYYY-MM-DD",
         help="Start the series here (before the snapshot: units held constant)",
+    )
+    rep.add_argument(
+        "--no-html",
+        action="store_true",
+        help="Write only the CSV reports (skip dashboard.html and *_report.html)",
     )
     show = sub.add_parser("show", help="Print latest value to the terminal (default)")
     show.add_argument(
@@ -329,6 +342,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "report":
         paths = write_all_reports(valuations, accounts, args.out, args.base)
+        if not args.no_html:
+            fund_names = load_fund_names(args.data)
+            transactions = load_transactions(args.data)
+            paths.append(
+                write_dashboard(valuations, accounts, fund_names, args.out, args.base)
+            )
+            paths.extend(
+                write_period_reports(
+                    valuations, accounts, fund_names, transactions, args.out, args.base
+                )
+            )
         print(f"Reports written to {args.out}:\n")
         for p in paths:
             print(f"  {p}")

@@ -28,12 +28,25 @@ class Transaction:
 
 @dataclass(frozen=True)
 class SnapshotPosition:
-    """Units held in an account/fund as of a statement date."""
+    """Units held in an account/fund as of a statement date.
+
+    ``cost`` is the book value / adjusted cost base (ACB) in the account's
+    currency, when it is known from a statement. It is ``None`` when the
+    statement only reported units (gain/loss is then reported as n/a).
+    """
 
     date: date
     account_id: str
     fund: str
     units: float
+    cost: float | None = None
+
+
+def _parse_optional_float(value: str | None) -> float | None:
+    text = (value or "").strip()
+    if not text or text.startswith("#"):
+        return None
+    return float(text)
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
@@ -61,6 +74,20 @@ def load_accounts(data_dir: Path) -> dict[str, Account]:
     if not accounts:
         raise ValueError(f"No accounts found in {data_dir / 'accounts.csv'}")
     return accounts
+
+
+def load_fund_names(data_dir: Path) -> dict[str, str]:
+    """Return {fund_code: display name} from funds.csv (optional)."""
+    path = data_dir / "funds.csv"
+    if not path.exists():
+        return {}
+    names: dict[str, str] = {}
+    for r in _read_csv(path):
+        code = (r.get("fund") or "").strip()
+        name = (r.get("name") or "").strip()
+        if code:
+            names[code] = name or code
+    return names
 
 
 def load_transactions(data_dir: Path) -> list[Transaction]:
@@ -160,6 +187,7 @@ def load_snapshot(data_dir: Path) -> list[SnapshotPosition]:
             account_id=r["account_id"].strip(),
             fund=r["fund"].strip(),
             units=float(r["units"]),
+            cost=_parse_optional_float(r.get("cost")),
         )
         for r in rows
     ]

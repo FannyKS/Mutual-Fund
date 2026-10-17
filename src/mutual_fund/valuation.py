@@ -25,10 +25,24 @@ class Valuation:
     currency: str
     fx_rate: float  # to base currency
     market_value: float  # in base currency
+    cost: float | None = None  # book value / ACB in base currency, if known
 
     @property
     def market_value_native(self) -> float:
         return self.units * self.nav
+
+    @property
+    def gain_loss(self) -> float | None:
+        """Market value minus cost, or None when cost is unknown."""
+        if self.cost is None:
+            return None
+        return self.market_value - self.cost
+
+    @property
+    def gain_loss_pct(self) -> float | None:
+        if self.cost is None or not self.cost:
+            return None
+        return (self.market_value - self.cost) / self.cost * 100.0
 
 
 def _index_by_date(observations, key=lambda x: x[0]):
@@ -94,11 +108,19 @@ def compute_valuations(
 
     warnings: list[str] = []
     snapshot = snapshot or []
+    positions: dict[tuple[str, str], float] = defaultdict(float)
+    costs: dict[tuple[str, str], float | None] = {}
     if snapshot:
         baseline_date = max(p.date for p in snapshot)
-        positions: dict[tuple[str, str], float] = defaultdict(float)
         for p in snapshot:
-            positions[(p.account_id, p.fund)] += p.units
+            k = (p.account_id, p.fund)
+            positions[k] += p.units
+            if k in costs and costs[k] is None:
+                continue  # already unknown — stays unknown
+            if p.cost is None:
+                costs[k] = None
+            else:
+                costs[k] = (costs.get(k) or 0.0) + p.cost
         pending = [t for t in transactions if t.date > baseline_date]
         skipped = len(transactions) - len(pending)
         if skipped:
@@ -144,8 +166,17 @@ def compute_valuations(
                 if t.account_id not in accounts:
                     unknown_accounts.add(t.account_id)
                     continue
-                sign = 1.0 if t.action == "BUY" else -1.0
-                positions[(t.account_id, t.fund)] += sign * t.units
+                k = (t.account_id, t.fund)
+                if t.action == "BUY":
+                    if costs.get(k) is not None:
+                        costs[k] = (costs.get(k) or 0.0) + t.units * t.price
+                    positions[k] += t.units
+                else:  # SELL — reduce cost basis proportionally
+                    units_before = positions[k]
+                    if costs.get(k) is not None and units_before > 1e-9:
+                        fraction = min(t.units, units_before) / units_before
+                        costs[k] = max(0.0, costs[k] - fraction * costs[k])
+                    positions[k] -= t.units
             ti += 1
 
         for (acct_id, fund), units in positions.items():
@@ -174,6 +205,7 @@ def compute_valuations(
                     currency=currency,
                     fx_rate=rate,
                     market_value=units * nav * rate,
+                    cost=costs.get((acct_id, fund)),
                 )
             )
 

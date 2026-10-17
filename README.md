@@ -20,9 +20,17 @@ produces:
 2. **Weekly report**
 3. **Monthly report**
 4. **Consolidated report** across all accounts (with per-institution subtotals)
+5. **Dashboard** — an HTML overview (cards, allocation donut, value-by-account
+   bars, value-history chart, holdings table with gain/loss)
 
-Reports are CSV files written to `~/Documents/Mutual-Fund-Reports/`
-(outside `src/`, per the specification), plus an optional terminal summary.
+Reports are written to `~/Documents/Mutual-Fund-Reports/` (outside `src/`, per
+the specification): the four reports as CSV, plus `dashboard.html` and an HTML
+version of each period report (`daily_report.html`, `weekly_report.html`,
+`monthly_report.html`). A terminal summary is also printed.
+
+When a statement reports a **cost basis (ACB / book value)**, holdings also
+show **gain/loss** and a **Cost (ACB)** total. Accounts without a cost basis
+are reported as `n/a` and flagged with a `*` in the totals.
 
 ## Setup
 
@@ -41,7 +49,7 @@ pip install -e .
 | `nav.csv` | `date,fund,nav,currency` | NAV per unit (auto-fetched, see below) |
 | `nav_overrides.csv` | `date,fund,nav,currency` | Optional precise NAVs that win over `nav.csv` |
 | `funds.csv` | `fund,name,currency,source,identifier,pattern` | Where each fund's NAV comes from |
-| `snapshot.csv` | `date,account_id,fund,units` | Holdings baseline (see workflow below) |
+| `snapshot.csv` | `date,account_id,fund,units,cost` | Holdings baseline; `cost` = ACB/book value (optional) |
 | `fx.csv` | `date,currency,rate` | Rate **to CAD**. Optional if all funds are CAD |
 
 - `data/` is gitignored — your real financial data is never committed.
@@ -51,6 +59,10 @@ pip install -e .
 - `nav_overrides.csv` is optional. Any row in it overrides the same
   `(date, fund)` in `nav.csv` and is never touched by `fetch-nav` — use it to
   pin a precise NAV where a public feed only publishes a rounded one.
+- `snapshot.csv`'s `cost` column is optional. Leave it blank for holdings
+  whose book value you don't have (gain/loss then shows `n/a`). A BUY/SELL
+  recorded with `add` adjusts the cost basis automatically (a sale removes
+  cost proportionally).
 
 ## Usage
 
@@ -58,8 +70,11 @@ pip install -e .
 # Terminal summary of the latest value (per-account + consolidated)
 mutual-fund show
 
-# Write daily/weekly/monthly CSV reports (default: ~/Documents/Mutual-Fund-Reports)
+# Write daily/weekly/monthly reports + HTML dashboard (default: ~/Documents/Mutual-Fund-Reports)
 mutual-fund report
+
+# Write only the CSV reports (skip the HTML files)
+mutual-fund report --no-html
 
 # Start the series earlier than the snapshot (see "Starting before the snapshot")
 mutual-fund report --from 2026-01-01
@@ -99,8 +114,10 @@ text with the macOS Vision framework (no installs needed):
 swift scripts/ocr.swift Holdings/Fanny/*.jpeg
 ```
 
-Then transcribe fund code, units and NAV into `snapshot.csv` / `nav.csv`.
-(The `.xlsx` exports, like Carte's, can be read directly.)
+Then transcribe fund code, units, NAV **and ACB** (cost) into
+`snapshot.csv` / `nav.csv`. Manulife statements label it `ACB`; TD labels it
+`Book Cost`. (The `.xlsx` exports, like Carte's, can be read directly, but
+may not include a cost basis.)
 
 ## NAVs: automatic daily fetch
 
@@ -181,9 +198,9 @@ check a new snapshot against your records.
 **Step 1 — initial snapshot.** Save your holdings export as `data/snapshot.csv`:
 
 ```
-date,account_id,fund,units
-2026-10-16,F-TFSA,MIF001,400.0000
-2026-10-16,F-RRSP,MIF002,250.0000
+date,account_id,fund,units,cost
+2026-10-16,F-TFSA,MIF001,400.0000,9000.00
+2026-10-16,F-RRSP,MIF002,250.0000,
 ```
 
 That date becomes the baseline; reports start from it and grow daily (use
@@ -228,3 +245,18 @@ date,Fanny TFSA (F-TFSA),Fanny RRSP (F-RRSP),...,MANULIFE_TOTAL,...,CARTE_TOTAL,
 
 Weekly reports keep the last valuation date of each ISO week; monthly reports
 keep the last valuation date of each month.
+
+### HTML output
+
+Alongside the CSVs, `report` writes a self-contained, dark-themed set of HTML
+files (no external assets, so they open anywhere):
+
+| File | Contents |
+|---|---|
+| `dashboard.html` | Cards (value, today's change, gain/loss, cost), allocation donut, value-by-account bars, value-history chart, holdings table |
+| `daily_report.html` | Latest day: start/end value, change, split into contributions vs market movement, by account, by fund, daily rows |
+| `weekly_report.html` | Current week-to-date, same layout |
+| `monthly_report.html` | Current month-to-date, same layout |
+
+"Contributions" is the net of recorded buys/sells in the period; the rest of
+the change is labelled "market". Use `--no-html` to skip these files.

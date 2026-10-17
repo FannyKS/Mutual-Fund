@@ -31,11 +31,14 @@ I will provide the CSVs of my holdings (accounts, transactions, NAVs, FX rates).
 
 **How data is provided:**
 
-1. An initial **holdings snapshot** (`snapshot.csv`) — what I hold today.
+1. An initial **holdings snapshot** (`snapshot.csv`) — what I hold today,
+   including the book value / adjusted cost base (`cost`) where the statement
+   reports it (Manulife: `ACB`; TD: `Book Cost`).
 2. After that, only **changes** (buys/sells) are submitted whenever they happen
-   (`mutual-fund add ...`, which appends to `transactions.csv`).
+   (`mutual-fund add ...`, which appends to `transactions.csv`). A buy adds to
+   the cost basis; a sell removes it proportionally.
 3. A fresh snapshot can be submitted later and reconciled against the recorded
-   changes (`mutual-fund reconcile --snapshot ...`).
+   changes (`mutual-fund reconcile --snapshot ...`, preserving `cost`).
 
 **NAV data** is fetched automatically from public sources each day
 (`mutual-fund fetch-nav`), driven by `funds.csv`. Supported sources: Barchart
@@ -61,6 +64,11 @@ Reports on each account, plus a consolidated report across all accounts:
 2. Weekly report
 3. Monthly report
 4. Consolidated report (all 10 accounts)
+
+Each is written as **CSV** and as a self-contained **HTML** page; an HTML
+**dashboard** (`dashboard.html`) gives the at-a-glance view (cards, allocation
+donut, value-by-account bars, value-history chart, holdings table). Where a
+cost basis is available, reports also show **gain/loss**.
 
 Reports should be written to my computer, not under SRC
 (default: ~/Documents/Mutual-Fund-Reports).
