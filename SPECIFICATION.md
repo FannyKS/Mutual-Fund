@@ -1,23 +1,26 @@
 # Mutual Fund Specification
 To create a repository for my mutual fund market value reports.
 
-## Accounts (7 total), across 3 institutions
+## Accounts (10 total), across 3 institutions
 
-**Manulife** (5):
+**Manulife** (8):
 
 1. Fanny — TFSA
 2. Fanny — RRSP
-3. Fanny — Non-Registered
-4. KC — RRSP
-5. KC — TFSA
+3. Fanny — Spousal RRSP
+4. Fanny — Non-Registered
+5. KC — RRSP
+6. KC — Spousal RRSP
+7. KC — LIRA
+8. KC — TFSA
 
 **Carte** (1):
 
-6. Joint — Non-Registered
+9. Joint — Non-Registered
 
 **TD Bank** (1):
 
-7. TD — Non-Registered
+10. TD — Non-Registered
 
 Accounts may hold different funds, or the same fund in different accounts
 (the same fund can appear in multiple accounts).
@@ -35,8 +38,13 @@ I will provide the CSVs of my holdings (accounts, transactions, NAVs, FX rates).
    changes (`mutual-fund reconcile --snapshot ...`).
 
 **NAV data** is fetched automatically from public sources each day
-(`mutual-fund fetch-nav`), driven by `funds.csv`. The daily report runs the
-next morning, after the previous day's NAVs are published.
+(`mutual-fund fetch-nav`), driven by `funds.csv`. Supported sources: Fidelity
+Canada (`fidelity`, by fund code), Manulife Investment Management (`manulife`,
+by fund code — includes full history), The Globe and Mail (`globe`, by symbol
+like `TDB619.CF`), Yahoo Finance (`yahoo`, by ticker) and generic HTML/CSV
+pages. Foreign-currency NAVs are converted with daily rates from the Bank of
+Canada (`mutual-fund fetch-fx`). The daily report runs the next morning, after
+the previous day's NAVs are published.
 
 ## Reports
 
@@ -45,7 +53,7 @@ Reports on each account, plus a consolidated report across all accounts:
 1. Daily report
 2. Weekly report
 3. Monthly report
-4. Consolidated report (all 7 accounts)
+4. Consolidated report (all 10 accounts)
 
 Reports should be written to my computer, not under SRC
 (default: ~/Documents/Mutual-Fund-Reports).

@@ -91,7 +91,9 @@ TDB900,TD Canadian Bond,CAD,html,https://example.com/td/tdb900,"\$([0-9]+\.[0-9]
 ```
 
 Sources: `yahoo` (ticker), `fidelity` (Fidelity Canada fund code),
-`html` (scrape a public fund page with a regex), `csv` (a public CSV URL). Then:
+`manulife` (Manulife fund code, e.g. MGF1916 — includes full NAV history),
+`globe` (Globe and Mail symbol, e.g. TDB619.CF), `html` (scrape a public
+fund page with a regex), `csv` (a public CSV URL). Then:
 
 ```bash
 mutual-fund fetch-nav              # fetch the last year, merge into nav.csv

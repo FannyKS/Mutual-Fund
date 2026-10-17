@@ -12,6 +12,10 @@ Supported sources:
   yahoo     - Yahoo Finance chart API (works for many funds/ETFs by ticker)
   fidelity  - Fidelity Canada's public fund data feed, by fund code
               (e.g. 223 = Fidelity Dividend Plus Series B)
+  manulife  - Manulife Investment Management fund profile, by fund code
+              (e.g. MGF1916). Server-rendered, includes full NAV history.
+  globe     - The Globe and Mail fund quote, by symbol (e.g. TDB619.CF).
+              Latest NAV only; works for many Canadian funds.
   html      - scrape a public fund page; `pattern` is a regex with one capture
               group for the price
   csv       - a public CSV URL; last numeric column is used as the NAV
@@ -180,9 +184,66 @@ def fetch_fidelity(src: FundSource, start: date, end: date) -> list[tuple[date, 
     )
 
 
+MANULIFE_PROFILE = "https://funds.manulife.ca/en-US/profiles/{code}"
+_MANULIFE_ROW = re.compile(
+    r"<td>(\d{4}/\d{2}/\d{2})</td>\s*<td class=\"col-number\">\s*\$([\d.]+)"
+)
+
+
+def fetch_manulife(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:
+    """Manulife fund profile page: full historical NAV table, server-rendered.
+
+    `identifier` is the fund code, e.g. MGF1916. Because the page carries the
+    whole history, this also backfills past dates.
+    """
+    html = _get(MANULIFE_PROFILE.format(code=src.identifier))
+    rows = _MANULIFE_ROW.findall(html)
+    if not rows:
+        raise ValueError(
+            f"Fund {src.fund}: no NAV table found for Manulife code "
+            f"'{src.identifier}'. Check the fund code."
+        )
+    out: list[tuple[date, float]] = []
+    for raw_date, raw_nav in rows:
+        d = datetime.strptime(raw_date, "%Y/%m/%d").date()
+        if start <= d <= end:
+            out.append((d, float(raw_nav)))
+    return out
+
+
+GLOBE_QUOTE = "https://www.theglobeandmail.com/investing/markets/funds/{symbol}/"
+_GLOBE_PRICE = re.compile(
+    r'"lastPrice":"([\d.]+)"'
+    r'.*?"tradeTime":"(\d{2})\\/(\d{2})\\/(\d{2})"',
+    re.S,
+)
+
+
+def fetch_globe(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:
+    """The Globe and Mail fund quote (latest price + trade date).
+
+    `identifier` is the quote symbol, e.g. TDB619.CF. Only the latest
+    observation is available, so history accumulates in nav.csv over time.
+    """
+    html = _get(GLOBE_QUOTE.format(symbol=src.identifier))
+    m = _GLOBE_PRICE.search(html)
+    if not m:
+        raise ValueError(
+            f"Fund {src.fund}: no quote found for Globe symbol "
+            f"'{src.identifier}'. Check the symbol."
+        )
+    price, mm, dd, yy = m.groups()
+    d = date(2000 + int(yy), int(mm), int(dd))
+    if not (start <= d <= end):
+        return []
+    return [(d, float(price))]
+
+
 ADAPTERS = {
     "yahoo": fetch_yahoo,
     "fidelity": fetch_fidelity,
+    "manulife": fetch_manulife,
+    "globe": fetch_globe,
     "html": fetch_html,
     "csv": fetch_csv,
 }
