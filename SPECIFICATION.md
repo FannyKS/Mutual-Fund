@@ -1,22 +1,26 @@
 # Mutual Fund Specification
 To create a repository for my mutual fund market value reports.
 
-## Accounts (7 total)
+## Accounts (7 total), across 3 institutions
 
-Manulife (6):
+**Manulife** (5):
 
 1. Fanny — TFSA
 2. Fanny — RRSP
 3. Fanny — Non-Registered
 4. KC — RRSP
 5. KC — TFSA
-6. Joint (Both) — Non-Registered
 
-TD Canada Trust (1):
+**Carte** (1):
+
+6. Joint — Non-Registered
+
+**TD Bank** (1):
 
 7. TD — Non-Registered
 
-Accounts may hold different funds, or the same fund in different accounts.
+Accounts may hold different funds, or the same fund in different accounts
+(the same fund can appear in multiple accounts).
 
 ## Data
 

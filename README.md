@@ -6,14 +6,15 @@ See [SPECIFICATION.md](SPECIFICATION.md) for the full specification.
 
 ## What it does
 
-Tracks 7 accounts — Fanny (TFSA, RRSP, Non-Reg), KC (RRSP, TFSA),
-Joint (Non-Reg) at Manulife, and TD (Non-Reg) at TD Canada Trust — computes
-market value of holdings over time (units × NAV × FX rate), and produces:
+Tracks 7 accounts across 3 institutions — Fanny (TFSA, RRSP, Non-Reg) and
+KC (RRSP, TFSA) at Manulife, Joint (Non-Reg) at Carte, and TD (Non-Reg) at
+TD Bank. Computes market value of holdings over time (units × NAV × FX rate),
+and produces:
 
 1. **Daily report**
 2. **Weekly report**
 3. **Monthly report**
-4. **Consolidated report** across all 7 accounts
+4. **Consolidated report** across all 7 accounts (with per-institution subtotals)
 
 Reports are CSV files written to `~/Documents/Mutual-Fund-Reports/`
 (outside `src/`, per the specification), plus an optional terminal summary.
@@ -60,11 +61,12 @@ Without installing: `PYTHONPATH=src python3 -m mutual_fund show`
 ## Report format
 
 Each report CSV has one row per valuation date with per-account market values
-(in base currency) and a final `CONSOLIDATED_<currency>` column:
+(in base currency), grouped with a subtotal per institution, and a final
+`CONSOLIDATED_<currency>` column:
 
 ```
-date,Fanny TFSA (F-TFSA),Fanny RRSP (F-RRSP),...,TD Non-Reg (TD-NONREG),CONSOLIDATED_CAD
-2026-07-31,10152.14,14903.22,...,33381.47,101238.55
+date,Fanny TFSA (F-TFSA),Fanny RRSP (F-RRSP),...,MANULIFE_TOTAL,...,CARTE_TOTAL,TD BANK_TOTAL,CONSOLIDATED_CAD
+2026-07-31,10152.14,14903.22,...,48973.61,...,20184.90,33381.47,101238.55
 ```
 
 Weekly reports keep the last valuation date of each ISO week; monthly reports

@@ -54,6 +54,14 @@ def consolidate(
     return {d: sum(accts.values()) for d, accts in totals.items()}
 
 
+def _institution_groups(accounts: dict[str, Account]) -> dict[str, list[str]]:
+    """{institution: [account_id, ...]} preserving first-seen order."""
+    groups: dict[str, list[str]] = defaultdict(list)
+    for acct_id, acct in accounts.items():
+        groups[acct.institution].append(acct_id)
+    return dict(groups)
+
+
 def write_report(
     totals: dict[date, dict[str, float]],
     accounts: dict[str, Account],
@@ -63,20 +71,28 @@ def write_report(
 ) -> Path:
     output_dir.mkdir(parents=True, exist_ok=True)
     path = output_dir / f"{period}_report.csv"
-    acct_ids = list(accounts)
+    groups = _institution_groups(accounts)
+
+    header = ["date"]
+    for inst, acct_ids in groups.items():
+        header += [f"{accounts[a].name} ({a})" for a in acct_ids]
+        header.append(f"{inst.upper()}_TOTAL")
+    header.append(f"CONSOLIDATED_{base_currency}")
+
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        header = ["date"] + [
-            f"{accounts[a].name} ({a})" for a in acct_ids
-        ] + [f"CONSOLIDATED_{base_currency}"]
         w.writerow(header)
         for d, accts in totals.items():
-            total = sum(accts.values())
-            w.writerow(
-                [d.isoformat()]
-                + [f"{accts.get(a, 0.0):.2f}" for a in acct_ids]
-                + [f"{total:.2f}"]
-            )
+            row = [d.isoformat()]
+            for inst, acct_ids in groups.items():
+                col_total = 0.0
+                for a in acct_ids:
+                    v = accts.get(a, 0.0)
+                    col_total += v
+                    row.append(f"{v:.2f}")
+                row.append(f"{col_total:.2f}")
+            row.append(f"{sum(accts.values()):.2f}")
+            w.writerow(row)
     return path
 
 
@@ -125,15 +141,21 @@ def print_summary(
     print(f"Valuation date: {latest.isoformat()}  (base currency: {base_currency})\n")
     print(f"{'Account':<32}{'Value':>15}   {'Since prev. day':>15}")
     print("-" * 66)
-    for acct_id, acct in accounts.items():
-        cur = daily[latest].get(acct_id, 0.0)
-        if prev:
-            before = daily[prev].get(acct_id, 0.0)
-            pct = (cur / before - 1) * 100 if before else 0.0
-            chg = f"{pct:+.2f}%"
-        else:
-            chg = "n/a"
-        print(f"{acct.name + ' (' + acct_id + ')':<32}{_fmt(cur)}   {chg:>15}")
+    groups = _institution_groups(accounts)
+    for inst, acct_ids in groups.items():
+        inst_total = 0.0
+        for acct_id in acct_ids:
+            acct = accounts[acct_id]
+            cur = daily[latest].get(acct_id, 0.0)
+            inst_total += cur
+            if prev:
+                before = daily[prev].get(acct_id, 0.0)
+                pct = (cur / before - 1) * 100 if before else 0.0
+                chg = f"{pct:+.2f}%"
+            else:
+                chg = "n/a"
+            print(f"{'  ' + acct.name + ' (' + acct_id + ')':<32}{_fmt(cur)}   {chg:>15}")
+        print(f"{'  ' + inst + ' subtotal':<32}{_fmt(inst_total)}")
     print("-" * 66)
     print(f"{'CONSOLIDATED':<32}{_fmt(sum(daily[latest].values())):>15}")
 
