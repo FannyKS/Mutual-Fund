@@ -26,6 +26,14 @@ Accounts may hold different funds, or the same fund in different accounts
 
 I will provide the CSVs of my holdings (accounts, transactions, NAVs, FX rates).
 
+**How data is provided:**
+
+1. An initial **holdings snapshot** (`snapshot.csv`) — what I hold today.
+2. After that, only **changes** (buys/sells) are submitted whenever they happen
+   (`mutual-fund add ...`, which appends to `transactions.csv`).
+3. A fresh snapshot can be submitted later and reconciled against the recorded
+   changes (`mutual-fund reconcile --snapshot ...`).
+
 ## Reports
 
 Reports on each account, plus a consolidated report across all accounts:

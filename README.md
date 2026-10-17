@@ -34,6 +34,7 @@ pip install -e .
 | `accounts.csv` | `account_id,name,owner,type,institution,currency` | Your 7 accounts |
 | `transactions.csv` | `date,account_id,fund,action,units,price` | `action` = BUY/SELL |
 | `nav.csv` | `date,fund,nav,currency` | NAV per unit, from your fund company |
+| `snapshot.csv` | `date,account_id,fund,units` | Holdings baseline (see workflow below) |
 | `fx.csv` | `date,currency,rate` | Rate **to CAD** (e.g. USD→CAD ≈ 1.37). Not needed for CAD-only funds |
 
 - `data/` is gitignored — your real financial data is never committed.
@@ -57,6 +58,47 @@ mutual-fund --base USD report
 ```
 
 Without installing: `PYTHONPATH=src python3 -m mutual_fund show`
+
+## Workflow: snapshot + changes
+
+You send a **holdings snapshot** (what you hold today). After that, you only
+send **changes** (buys/sells). The tool keeps the running position and can
+check a new snapshot against your records.
+
+**Step 1 — initial snapshot.** Save your holdings export as `data/snapshot.csv`:
+
+```
+date,account_id,fund,units
+2026-10-16,F-TFSA,MIF001,400.0000
+2026-10-16,F-RRSP,MIF002,250.0000
+```
+
+That date becomes the baseline; reports start from it and grow daily.
+
+**Step 2 — record a change** (a buy or sell) whenever one happens:
+
+```bash
+mutual-fund add --account F-RRSP --fund MIF001 --units 200 --price 26.50
+mutual-fund add --account J-NONREG --fund MIF001 --units 150 --price 27.10 --action SELL
+# optional --date YYYY-MM-DD (defaults to today)
+```
+
+This appends one row to `data/transactions.csv`. That's the whole "sending a
+change" step — one command, no file editing.
+
+**Step 3 — verify against a fresh snapshot** (recommended after a few months,
+or whenever you re-download holdings). Save the new export anywhere and run:
+
+```bash
+mutual-fund reconcile --snapshot ~/Downloads/new_holdings.csv
+
+# if everything matches, make it the new baseline:
+mutual-fund reconcile --snapshot ~/Downloads/new_holdings.csv --accept
+```
+
+`reconcile` compares each account/fund's units (snapshot vs. snapshot + your
+recorded changes) and reports differences, so a missed or double-counted
+transaction is caught before it corrupts your history.
 
 ## Report format
 

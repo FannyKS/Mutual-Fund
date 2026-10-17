@@ -26,6 +26,16 @@ class Transaction:
     price: float
 
 
+@dataclass(frozen=True)
+class SnapshotPosition:
+    """Units held in an account/fund as of a statement date."""
+
+    date: date
+    account_id: str
+    fund: str
+    units: float
+
+
 def _read_csv(path: Path) -> list[dict[str, str]]:
     if not path.exists():
         raise FileNotFoundError(
@@ -100,3 +110,48 @@ def load_fx(data_dir: Path) -> list[tuple[date, str, float]]:
     ]
     out.sort(key=lambda x: (x[0], x[1]))
     return out
+
+
+def load_snapshot(data_dir: Path) -> list[SnapshotPosition]:
+    """Load the holdings snapshot (data/snapshot.csv) if present.
+
+    This is the baseline: units held per account/fund as of the snapshot
+    date. Transactions dated on or before that date are assumed to be
+    already reflected in it.
+    """
+    path = data_dir / "snapshot.csv"
+    if not path.exists():
+        return []
+    rows = _read_csv(path)
+    out = [
+        SnapshotPosition(
+            date=date.fromisoformat(r["date"].strip()),
+            account_id=r["account_id"].strip(),
+            fund=r["fund"].strip(),
+            units=float(r["units"]),
+        )
+        for r in rows
+    ]
+    return out
+
+
+def append_transaction(data_dir: Path, txn: Transaction) -> Path:
+    """Append one transaction to data/transactions.csv, creating it if needed."""
+    path = data_dir / "transactions.csv"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    new_file = not path.exists()
+    with path.open("a", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        if new_file:
+            w.writerow(["date", "account_id", "fund", "action", "units", "price"])
+        w.writerow(
+            [
+                txn.date.isoformat(),
+                txn.account_id,
+                txn.fund,
+                txn.action,
+                f"{txn.units:.4f}",
+                f"{txn.price:.4f}",
+            ]
+        )
+    return path

@@ -12,7 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
 
-from .loader import Account, Transaction
+from .loader import Account, SnapshotPosition, Transaction
 
 
 @dataclass(frozen=True)
@@ -68,25 +68,56 @@ def compute_valuations(
     navs: list[tuple[date, str, float, str]],
     fx: list[tuple[date, str, float]],
     base_currency: str = "CAD",
-) -> list[Valuation]:
+    snapshot: list[SnapshotPosition] | None = None,
+) -> tuple[list[Valuation], list[str]]:
+    """Value holdings over time.
+
+    If a snapshot is supplied it is the baseline: valuation starts at the
+    snapshot date, using the units held there, plus any transactions dated
+    after it. Without a snapshot, units are built by replaying all
+    transactions from scratch.
+
+    Returns (valuations, warnings).
+    """
     if not navs:
         raise ValueError("No NAV data supplied — nothing to value.")
 
     nav_series = _Series(navs, lambda o: (o[2], o[3]))  # (nav, currency)
     fx_series = _Series(fx, lambda o: o[2])
 
-    # Replay transactions to get units held per (account, fund) on each date.
-    # positions[date] = delta applied on that date; carry forward by scanning.
-    value_dates = sorted({o[0] for o in navs})
+    warnings: list[str] = []
+    snapshot = snapshot or []
+    if snapshot:
+        baseline_date = max(p.date for p in snapshot)
+        positions: dict[tuple[str, str], float] = defaultdict(float)
+        for p in snapshot:
+            positions[(p.account_id, p.fund)] += p.units
+        pending = [t for t in transactions if t.date > baseline_date]
+        skipped = len(transactions) - len(pending)
+        if skipped:
+            warnings.append(
+                f"{skipped} transaction(s) dated on or before the snapshot "
+                f"date ({baseline_date.isoformat()}) were ignored — they are "
+                "assumed to be included in the snapshot."
+            )
+        value_dates = sorted({o[0] for o in navs if o[0] >= baseline_date})
+        if not value_dates:
+            raise ValueError(
+                f"No NAV data on or after the snapshot date "
+                f"({baseline_date.isoformat()})."
+            )
+    else:
+        positions = defaultdict(float)
+        pending = list(transactions)
+        value_dates = sorted({o[0] for o in navs})
 
+    # Replay the remaining transactions chronologically across the dates.
     txns_by_date: dict[date, list[Transaction]] = defaultdict(list)
-    for t in transactions:
+    for t in pending:
         txns_by_date[t.date].append(t)
 
-    positions: dict[tuple[str, str], float] = defaultdict(float)
     txn_dates = sorted(txns_by_date)
     ti = 0
-    active_txn_dates: set[date] = set()
 
     valuations: list[Valuation] = []
     unknown_accounts: set[str] = set()
@@ -94,7 +125,6 @@ def compute_valuations(
 
     for d in value_dates:
         while ti < len(txn_dates) and txn_dates[ti] <= d:
-            active_txn_dates.add(txn_dates[ti])
             for t in txns_by_date[txn_dates[ti]]:
                 if t.account_id not in accounts:
                     unknown_accounts.add(t.account_id)
@@ -146,4 +176,26 @@ def compute_valuations(
         )
 
     valuations.sort(key=lambda v: (v.date, v.account.account_id, v.fund))
-    return valuations
+    return valuations, warnings
+
+
+def positions_as_of(
+    snapshot: list[SnapshotPosition],
+    transactions: list[Transaction],
+    on: date,
+) -> dict[tuple[str, str], float]:
+    """Units per (account, fund) as of a date, from snapshot + later buys/sells."""
+    positions: dict[tuple[str, str], float] = defaultdict(float)
+    baseline_date = None
+    if snapshot:
+        baseline_date = max(p.date for p in snapshot)
+        for p in snapshot:
+            positions[(p.account_id, p.fund)] += p.units
+    for t in transactions:
+        if baseline_date is not None and t.date <= baseline_date:
+            continue
+        if t.date > on:
+            continue
+        sign = 1.0 if t.action == "BUY" else -1.0
+        positions[(t.account_id, t.fund)] += sign * t.units
+    return positions
