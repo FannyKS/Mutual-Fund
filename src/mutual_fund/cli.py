@@ -24,6 +24,7 @@ from .loader import (
     load_snapshot,
     load_transactions,
 )
+from .navfetch import update_navs
 from .reports import (
     DEFAULT_OUTPUT_DIR,
     print_summary,
@@ -187,7 +188,59 @@ def main(argv: list[str] | None = None) -> int:
         "--accept", action="store_true", help="Save as the new baseline if it matches"
     )
 
+    fetch = sub.add_parser(
+        "fetch-nav",
+        help="Fetch fund NAVs from public sources into data/nav.csv",
+    )
+    fetch.add_argument(
+        "--funds",
+        type=Path,
+        default=None,
+        help="Fund/source mapping CSV (default: <data>/funds.csv)",
+    )
+    fetch.add_argument(
+        "--since",
+        type=date.fromisoformat,
+        default=None,
+        help="Start date YYYY-MM-DD (default: 1 year ago)",
+    )
+    fetch.add_argument(
+        "--until",
+        type=date.fromisoformat,
+        default=None,
+        help="End date YYYY-MM-DD (default: today)",
+    )
+    fetch.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Replace NAVs already recorded for the same date/fund",
+    )
+    fetch.add_argument(
+        "--dry-run", action="store_true", help="Fetch but do not write nav.csv"
+    )
+
     args = parser.parse_args(argv)
+
+    if args.command == "fetch-nav":
+        try:
+            added, errors = update_navs(
+                args.data,
+                args.funds,
+                args.since,
+                args.until,
+                overwrite=args.overwrite,
+                dry_run=args.dry_run,
+            )
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        for err in errors:
+            print(f"Warning: {err}", file=sys.stderr)
+        verb = "would add" if args.dry_run else "added"
+        print(f"NAV fetch complete: {verb} {added} row(s).")
+        if errors:
+            print(f"{len(errors)} fund(s) failed — see warnings above.", file=sys.stderr)
+        return 1 if errors and not added else 0
 
     try:
         if args.command == "add":

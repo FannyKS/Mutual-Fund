@@ -1,0 +1,9 @@
+fund,name,currency,source,identifier,pattern
+# Map each fund you hold to a public NAV source.
+# Examples (replace with your real funds):
+MIF001,Manulife Monthly High Income,CAD,yahoo,XIC.TO,
+MIF002,Manulife US Equity,CAD,yahoo,ZSP.TO,
+TDB900,TD Canadian Bond,CAD,yahoo,XBB.TO,
+TDB902,TD Global Growth,CAD,yahoo,XAW.TO,
+# HTML example: fund company page with the price in the markup
+# TDB900,TD Canadian Bond,CAD,html,https://example.com/td/tdb900,"\$([0-9]+\.[0-9]+)"

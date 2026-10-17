@@ -1,0 +1,227 @@
+"""Fetch fund NAVs from public sources.
+
+Fund NAVs are published publicly every business day after market close, so
+they can be fetched without any account access. Each fund is mapped to a
+source in data/funds.csv:
+
+    fund,name,currency,source,identifier,pattern
+    MIF001,Manulife X Fund,CAD,yahoo,0P0000XXXX.TO,
+    TDB900,TD Canadian Bond,CAD,html,https://example.com/td-funds,"\\$([0-9.]+)"
+
+Supported sources:
+  yahoo  - Yahoo Finance chart API (works for many funds/ETFs by ticker)
+  html   - scrape a public fund page; `pattern` is a regex with one capture
+           group for the price
+  csv    - a public CSV URL; last numeric column is used as the NAV
+"""
+
+from __future__ import annotations
+
+import csv
+import json
+import re
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) mutual-fund/0.1"
+
+
+@dataclass(frozen=True)
+class FundSource:
+    fund: str
+    name: str
+    currency: str
+    source: str
+    identifier: str
+    pattern: str = ""
+
+
+def _get(url: str, timeout: int = 20) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def load_fund_sources(path: Path) -> list[FundSource]:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Missing {path}. Create it to list where each fund's NAV comes "
+            "from (see examples/funds.csv)."
+        )
+    with path.open(newline="", encoding="utf-8-sig") as f:
+        rows = [
+            r
+            for r in csv.DictReader(f)
+            if (r.get("fund") or "").strip()
+            and not (r.get("fund") or "").strip().startswith("#")
+        ]
+    out = []
+    for r in rows:
+        out.append(
+            FundSource(
+                fund=r["fund"].strip(),
+                name=r.get("name", "").strip(),
+                currency=r.get("currency", "CAD").strip().upper(),
+                source=r["source"].strip().lower(),
+                identifier=r["identifier"].strip(),
+                pattern=r.get("pattern", "").strip(),
+            )
+        )
+    if not out:
+        raise ValueError(f"No funds found in {path}")
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Source adapters — each returns [(date, nav), ...]
+# ---------------------------------------------------------------------------
+
+def fetch_yahoo(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:
+    p1 = int(datetime(start.year, start.month, start.day).timestamp())
+    p2 = int(datetime(end.year, end.month, end.day).timestamp()) + 86400
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/"
+        f"{urllib.parse.quote(src.identifier)}"
+        f"?period1={p1}&period2={p2}&interval=1d"
+    )
+    data = json.loads(_get(url))
+    result = (data.get("chart") or {}).get("result")
+    if not result:
+        raise ValueError(
+            f"Yahoo returned no data for '{src.identifier}' "
+            f"(fund {src.fund}). Check the ticker."
+        )
+    chart = result[0]
+    stamps = chart.get("timestamp") or []
+    closes = ((chart.get("indicators") or {}).get("quote") or [{}])[0].get("close") or []
+    out = []
+    for ts, close in zip(stamps, closes):
+        if close is None:
+            continue
+        out.append((datetime.fromtimestamp(ts).date(), float(close)))
+    return out
+
+
+def fetch_html(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:
+    if not src.pattern:
+        raise ValueError(f"Fund {src.fund}: 'html' source needs a pattern column.")
+    html = _get(src.identifier)
+    m = re.search(src.pattern, html)
+    if not m:
+        raise ValueError(
+            f"Fund {src.fund}: pattern {src.pattern!r} not found on {src.identifier}"
+        )
+    price = float(m.group(1).replace(",", ""))
+    return [(date.today(), price)]
+
+
+def fetch_csv(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:
+    text = _get(src.identifier)
+    reader = csv.reader(text.splitlines())
+    rows = [r for r in reader if r]
+    if not rows:
+        raise ValueError(f"Fund {src.fund}: empty CSV at {src.identifier}")
+    out = []
+    for r in rows:
+        try:
+            d = date.fromisoformat(r[0].strip())
+            price = float(r[-1].strip().replace(",", "").replace("$", ""))
+        except ValueError:
+            continue  # header or unparsable row
+        if start <= d <= end:
+            out.append((d, price))
+    return out
+
+
+ADAPTERS = {"yahoo": fetch_yahoo, "html": fetch_html, "csv": fetch_csv}
+
+
+def fetch(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:
+    adapter = ADAPTERS.get(src.source)
+    if adapter is None:
+        raise ValueError(
+            f"Fund {src.fund}: unknown source '{src.source}'. "
+            f"Use one of: {', '.join(ADAPTERS)}"
+        )
+    return adapter(src, start, end)
+
+
+# ---------------------------------------------------------------------------
+# Merge into nav.csv
+# ---------------------------------------------------------------------------
+
+def merge_nav(
+    nav_path: Path,
+    new_rows: list[tuple[date, FundSource, float]],
+    overwrite: bool = False,
+) -> int:
+    """Add fetched NAVs to nav.csv. Returns the number of new rows written."""
+    existing: dict[tuple[str, str], tuple[str, str, str, str]] = {}
+    if nav_path.exists():
+        with nav_path.open(newline="", encoding="utf-8-sig") as f:
+            for r in csv.DictReader(f):
+                key = (r["date"].strip(), r["fund"].strip())
+                existing[key] = (
+                    r["date"].strip(),
+                    r["fund"].strip(),
+                    r["nav"].strip(),
+                    r.get("currency", "CAD").strip() or "CAD",
+                )
+
+    added = 0
+    for d, src, nav in new_rows:
+        key = (d.isoformat(), src.fund)
+        row = (d.isoformat(), src.fund, f"{nav:.4f}", src.currency)
+        if key in existing and not overwrite:
+            continue
+        existing[key] = row
+        added += 1
+
+    nav_path.parent.mkdir(parents=True, exist_ok=True)
+    with nav_path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["date", "fund", "nav", "currency"])
+        for key in sorted(existing):
+            w.writerow(existing[key])
+    return added
+
+
+def update_navs(
+    data_dir: Path,
+    funds_path: Path | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    overwrite: bool = False,
+    dry_run: bool = False,
+) -> tuple[int, list[str]]:
+    """Fetch NAVs for every fund and merge them into data/nav.csv.
+
+    Returns (rows_added, errors).
+    """
+    funds_path = funds_path or (data_dir / "funds.csv")
+    end = end or date.today()
+    start = start or (end - timedelta(days=365))
+
+    fund_sources = load_fund_sources(funds_path)
+    rows: list[tuple[date, FundSource, float]] = []
+    errors: list[str] = []
+
+    for src in fund_sources:
+        try:
+            obs = fetch(src, start, end)
+        except Exception as e:  # keep going; report at the end
+            errors.append(f"{src.fund}: {e}")
+            continue
+        if not obs:
+            errors.append(f"{src.fund}: no observations returned")
+            continue
+        for d, nav in obs:
+            rows.append((d, src, nav))
+
+    if dry_run:
+        return len(rows), errors
+    added = merge_nav(data_dir / "nav.csv", rows, overwrite=overwrite)
+    return added, errors

@@ -98,8 +98,16 @@ def load_navs(data_dir: Path) -> list[tuple[date, str, float, str]]:
 
 
 def load_fx(data_dir: Path) -> list[tuple[date, str, float]]:
-    """Return FX rates as (date, currency, rate_to_CAD), sorted by date."""
-    rows = _read_csv(data_dir / "fx.csv")
+    """Return FX rates as (date, currency, rate_to_CAD), sorted by date.
+
+    Optional: if fx.csv is absent, an empty list is returned. This is fine
+    while every fund is priced in the base currency; a conversion will then
+    fail with a clear error if a foreign-currency fund shows up.
+    """
+    path = data_dir / "fx.csv"
+    if not path.exists():
+        return []
+    rows = _read_csv(path)
     out = [
         (
             date.fromisoformat(r["date"].strip()),

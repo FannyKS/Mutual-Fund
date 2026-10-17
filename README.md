@@ -33,9 +33,10 @@ pip install -e .
 |---|---|---|
 | `accounts.csv` | `account_id,name,owner,type,institution,currency` | Your 7 accounts |
 | `transactions.csv` | `date,account_id,fund,action,units,price` | `action` = BUY/SELL |
-| `nav.csv` | `date,fund,nav,currency` | NAV per unit, from your fund company |
+| `nav.csv` | `date,fund,nav,currency` | NAV per unit (auto-fetched, see below) |
+| `funds.csv` | `fund,name,currency,source,identifier,pattern` | Where each fund's NAV comes from |
 | `snapshot.csv` | `date,account_id,fund,units` | Holdings baseline (see workflow below) |
-| `fx.csv` | `date,currency,rate` | Rate **to CAD** (e.g. USD→CAD ≈ 1.37). Not needed for CAD-only funds |
+| `fx.csv` | `date,currency,rate` | Rate **to CAD**. Optional if all funds are CAD |
 
 - `data/` is gitignored — your real financial data is never committed.
 - `examples/` contains dummy sample data; copy it to `data/` to try things out.
@@ -58,6 +59,51 @@ mutual-fund --base USD report
 ```
 
 Without installing: `PYTHONPATH=src python3 -m mutual_fund show`
+
+## NAVs: automatic daily fetch
+
+Fund NAVs are public data — no account access needed — so they are fetched
+automatically. Map each fund to a source in `data/funds.csv`:
+
+```
+fund,name,currency,source,identifier,pattern
+MIF001,Manulife Monthly High Income,CAD,yahoo,0P0000XXXX.TO,
+TDB900,TD Canadian Bond,CAD,html,https://example.com/td/tdb900,"\$([0-9]+\.[0-9]+)"
+```
+
+Sources: `yahoo` (ticker), `html` (scrape a public fund page with a regex),
+`csv` (a public CSV URL). Then:
+
+```bash
+mutual-fund fetch-nav              # fetch the last year, merge into nav.csv
+mutual-fund fetch-nav --since 2026-01-01
+mutual-fund fetch-nav --dry-run
+```
+
+Useful for back-filling history: `fetch-nav --since 2020-01-01` gives you
+daily NAVs going back years, so weekly/monthly reports cover past dates.
+(Your **holdings** still come from snapshots — those can't be fetched.)
+
+## Daily automation
+
+`scripts/daily.sh` fetches NAVs, then writes the reports and logs to
+`~/Documents/Mutual-Fund-Reports/daily.log`. Run it each morning, after the
+previous day's NAVs are published (mutual fund NAVs are final only after
+market close).
+
+**macOS (launchd)** — edit the path in `scripts/com.mutual-fund.daily.plist`
+(replace `REPO_DIR`), then:
+
+```bash
+cp scripts/com.mutual-fund.daily.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.mutual-fund.daily.plist
+```
+
+It runs at 07:00 daily. **cron** alternative:
+
+```
+0 7 * * * MUTUAL_FUND_DATA=$HOME/src/Mutual-Fund/data /Users/fannyng/src/Mutual-Fund/scripts/daily.sh
+```
 
 ## Workflow: snapshot + changes
 

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  macOS launchd job: runs the daily report every morning at 07:00.
+
+  Install:
+    1. Edit the two absolute paths below (REPO_DIR and the script path).
+    2. cp scripts/com.mutual-fund.daily.plist ~/Library/LaunchAgents/
+    3. launchctl load ~/Library/LaunchAgents/com.mutual-fund.daily.plist
+
+  Check / uninstall:
+    launchctl list | grep mutual-fund
+    launchctl unload ~/Library/LaunchAgents/com.mutual-fund.daily.plist
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.mutual-fund.daily</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>REPO_DIR/scripts/daily.sh</string>
+  </array>
+
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/mutual-fund-daily.out</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/mutual-fund-daily.err</string>
+</dict>
+</plist>

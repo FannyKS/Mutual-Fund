@@ -34,6 +34,10 @@ I will provide the CSVs of my holdings (accounts, transactions, NAVs, FX rates).
 3. A fresh snapshot can be submitted later and reconciled against the recorded
    changes (`mutual-fund reconcile --snapshot ...`).
 
+**NAV data** is fetched automatically from public sources each day
+(`mutual-fund fetch-nav`), driven by `funds.csv`. The daily report runs the
+next morning, after the previous day's NAVs are published.
+
 ## Reports
 
 Reports on each account, plus a consolidated report across all accounts:
