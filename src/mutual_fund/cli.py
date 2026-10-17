@@ -36,14 +36,19 @@ from .valuation import compute_valuations, positions_as_of
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 
-def _load_and_value(data_dir: Path, base_currency: str, strict: bool = False):
+def _load_and_value(
+    data_dir: Path,
+    base_currency: str,
+    strict: bool = False,
+    start: date | None = None,
+):
     accounts = load_accounts(data_dir)
     transactions = load_transactions(data_dir)
     navs = load_navs(data_dir)
     fx = load_fx(data_dir)
     snapshot = load_snapshot(data_dir)
     valuations, warnings = compute_valuations(
-        accounts, transactions, navs, fx, base_currency, snapshot, strict
+        accounts, transactions, navs, fx, base_currency, snapshot, strict, start
     )
     return accounts, valuations, warnings
 
@@ -172,7 +177,23 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_OUTPUT_DIR,
         help=f"Output directory (default: {DEFAULT_OUTPUT_DIR})",
     )
-    sub.add_parser("show", help="Print latest value to the terminal (default)")
+    rep.add_argument(
+        "--from",
+        dest="from_date",
+        type=date.fromisoformat,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Start the series here (before the snapshot: units held constant)",
+    )
+    show = sub.add_parser("show", help="Print latest value to the terminal (default)")
+    show.add_argument(
+        "--from",
+        dest="from_date",
+        type=date.fromisoformat,
+        default=None,
+        metavar="YYYY-MM-DD",
+        help="Start the series here (before the snapshot: units held constant)",
+    )
 
     add = sub.add_parser("add", help="Record a buy/sell as a change to your holdings")
     add.add_argument("--account", required=True, help="e.g. F-RRSP")
@@ -293,7 +314,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         accounts, valuations, warnings = _load_and_value(
-            args.data, args.base, args.strict
+            args.data, args.base, args.strict, getattr(args, "from_date", None)
         )
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)

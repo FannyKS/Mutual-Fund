@@ -39,6 +39,7 @@ pip install -e .
 | `accounts.csv` | `account_id,name,owner,type,institution,currency` | Your accounts |
 | `transactions.csv` | `date,account_id,fund,action,units,price` | Changes only; optional |
 | `nav.csv` | `date,fund,nav,currency` | NAV per unit (auto-fetched, see below) |
+| `nav_overrides.csv` | `date,fund,nav,currency` | Optional precise NAVs that win over `nav.csv` |
 | `funds.csv` | `fund,name,currency,source,identifier,pattern` | Where each fund's NAV comes from |
 | `snapshot.csv` | `date,account_id,fund,units` | Holdings baseline (see workflow below) |
 | `fx.csv` | `date,currency,rate` | Rate **to CAD**. Optional if all funds are CAD |
@@ -47,6 +48,9 @@ pip install -e .
 - `examples/` contains dummy sample data; copy it to `data/` to try things out.
 - NAVs and FX rates are forward filled: on a date without a new value, the
   last known one is used (markets are closed on weekends/holidays).
+- `nav_overrides.csv` is optional. Any row in it overrides the same
+  `(date, fund)` in `nav.csv` and is never touched by `fetch-nav` — use it to
+  pin a precise NAV where a public feed only publishes a rounded one.
 
 ## Usage
 
@@ -57,6 +61,10 @@ mutual-fund show
 # Write daily/weekly/monthly CSV reports (default: ~/Documents/Mutual-Fund-Reports)
 mutual-fund report
 
+# Start the series earlier than the snapshot (see "Starting before the snapshot")
+mutual-fund report --from 2026-01-01
+mutual-fund show --from 2026-01-01
+
 # Custom output directory / data directory / base currency
 mutual-fund report --out ~/MyReports
 mutual-fund --data examples show
@@ -66,6 +74,21 @@ mutual-fund --base USD report
 Without installing: `PYTHONPATH=src python3 -m mutual_fund show`
 
 Add `--strict` to fail (instead of skipping) when a fund has no NAV yet.
+
+### Starting before the snapshot
+
+By default reports start at your snapshot date (the baseline). `--from` lets
+the series start earlier — useful for a full-year view:
+
+```bash
+mutual-fund report --from 2026-01-01
+```
+
+For dates before the snapshot the tool holds the snapshot's units constant
+(there is no earlier holdings data to use), so it answers "what would I be
+worth if I had held today's units?" — buys/sells and reinvested distributions
+before the snapshot are not reflected. A warning is printed. Fetch NAV history
+first so the earlier dates have prices (`fetch-nav` covers this automatically).
 
 ## Reading screenshots (OCR)
 
@@ -88,12 +111,15 @@ automatically. Map each fund to a source in `data/funds.csv`:
 fund,name,currency,source,identifier,pattern
 MIF001,Manulife Monthly High Income,CAD,yahoo,0P0000XXXX.TO,
 TDB900,TD Canadian Bond,CAD,html,https://example.com/td/tdb900,"\$([0-9]+\.[0-9]+)"
+MGF1916,Manulife Strategic Dividend Bundle GIF,CAD,barchart,MGF1916.CF,
 ```
 
-Sources: `yahoo` (ticker), `fidelity` (Fidelity Canada fund code),
-`manulife` (Manulife fund code, e.g. MGF1916 — includes full NAV history),
-`globe` (Globe and Mail symbol, e.g. TDB619.CF), `html` (scrape a public
-fund page with a regex), `csv` (a public CSV URL). Then:
+Sources: `barchart` (Barchart EOD series behind Globe and Mail fund pages —
+symbol like `MGF1916.CF`; **includes full daily history**), `yahoo` (ticker),
+`fidelity` (Fidelity Canada fund code), `manulife` (Manulife fund code, e.g.
+MGF1916 — includes full NAV history), `globe` (Globe and Mail symbol, e.g.
+TDB619.CF; latest only), `html` (scrape a public fund page with a regex),
+`csv` (a public CSV URL). Then:
 
 ```bash
 mutual-fund fetch-nav              # fetch the last year, merge into nav.csv
@@ -129,7 +155,8 @@ cp scripts/com.mutual-fund.daily.plist ~/Library/LaunchAgents/
 launchctl load ~/Library/LaunchAgents/com.mutual-fund.daily.plist
 ```
 
-It runs at 07:00 daily. **cron** alternative:
+It runs at 07:00 daily. Reports start at `MUTUAL_FUND_FROM` (default
+`2026-01-01`; set it to change the report window). **cron** alternative:
 
 ```
 0 7 * * * MUTUAL_FUND_DATA=$HOME/src/Mutual-Fund/data /Users/fannyng/src/Mutual-Fund/scripts/daily.sh
@@ -149,7 +176,9 @@ date,account_id,fund,units
 2026-10-16,F-RRSP,MIF002,250.0000
 ```
 
-That date becomes the baseline; reports start from it and grow daily.
+That date becomes the baseline; reports start from it and grow daily (use
+`report --from YYYY-MM-DD` to start the series earlier — see "Starting before
+the snapshot").
 
 **Step 2 — record a change** (a buy or sell) whenever one happens:
 

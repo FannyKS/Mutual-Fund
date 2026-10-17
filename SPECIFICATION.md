@@ -38,13 +38,20 @@ I will provide the CSVs of my holdings (accounts, transactions, NAVs, FX rates).
    changes (`mutual-fund reconcile --snapshot ...`).
 
 **NAV data** is fetched automatically from public sources each day
-(`mutual-fund fetch-nav`), driven by `funds.csv`. Supported sources: Fidelity
+(`mutual-fund fetch-nav`), driven by `funds.csv`. Supported sources: Barchart
+(`barchart`, by symbol like `MGF1916.CF` — includes full daily history), Fidelity
 Canada (`fidelity`, by fund code), Manulife Investment Management (`manulife`,
 by fund code — includes full history), The Globe and Mail (`globe`, by symbol
 like `TDB619.CF`), Yahoo Finance (`yahoo`, by ticker) and generic HTML/CSV
 pages. Foreign-currency NAVs are converted with daily rates from the Bank of
 Canada (`mutual-fund fetch-fx`). The daily report runs the next morning, after
 the previous day's NAVs are published.
+
+A precise NAV can be pinned in `nav_overrides.csv` (overrides `nav.csv`, and
+survives future fetches) where a public feed only publishes a rounded price.
+Reports may also start **before** the baseline with `report --from YYYY-MM-DD`;
+for those earlier dates the snapshot's units are held constant (and a warning
+is printed), giving a full-period view of today's holdings.
 
 ## Reports
 

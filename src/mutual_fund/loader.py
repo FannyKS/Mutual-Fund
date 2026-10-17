@@ -85,18 +85,37 @@ def load_transactions(data_dir: Path) -> list[Transaction]:
     return txns
 
 
-def load_navs(data_dir: Path) -> list[tuple[date, str, float, str]]:
-    """Return NAV observations as (date, fund, nav, currency), sorted by date."""
-    rows = _read_csv(data_dir / "nav.csv")
-    out = [
-        (
-            date.fromisoformat(r["date"].strip()),
-            r["fund"].strip(),
-            float(r["nav"]),
-            r["currency"].strip().upper(),
+def _parse_nav_rows(rows) -> list[tuple[date, str, float, str]]:
+    out = []
+    for r in rows:
+        d = (r.get("date") or "").strip()
+        if not d or d.startswith("#"):
+            continue  # blank or comment line
+        out.append(
+            (
+                date.fromisoformat(d),
+                r["fund"].strip(),
+                float(r["nav"]),
+                r["currency"].strip().upper(),
+            )
         )
-        for r in rows
-    ]
+    return out
+
+
+def load_navs(data_dir: Path) -> list[tuple[date, str, float, str]]:
+    """Return NAV observations as (date, fund, nav, currency), sorted by date.
+
+    Values in the optional `nav_overrides.csv` (same columns as nav.csv) take
+    precedence for the same (date, fund). Use it to pin a precise NAV that a
+    public feed only publishes rounded — it survives future fetches.
+    """
+    out = _parse_nav_rows(_read_csv(data_dir / "nav.csv"))
+    overrides_path = data_dir / "nav_overrides.csv"
+    if overrides_path.exists():
+        by_key = {(d, f): (d, f, n, c) for d, f, n, c in out}
+        for row in _parse_nav_rows(_read_csv(overrides_path)):
+            by_key[(row[0], row[1])] = row
+        out = list(by_key.values())
     out.sort(key=lambda x: (x[0], x[1]))
     return out
 

@@ -16,6 +16,9 @@ Supported sources:
               (e.g. MGF1916). Server-rendered, includes full NAV history.
   globe     - The Globe and Mail fund quote, by symbol (e.g. TDB619.CF).
               Latest NAV only; works for many Canadian funds.
+  barchart  - Barchart end-of-day series behind Globe and Mail fund pages,
+              by symbol (e.g. MGF1916.CF). Full daily history, works for
+              most Canadian funds.
   html      - scrape a public fund page; `pattern` is a regex with one capture
               group for the price
   csv       - a public CSV URL; last numeric column is used as the NAV
@@ -45,8 +48,11 @@ class FundSource:
     pattern: str = ""
 
 
-def _get(url: str, timeout: int = 20) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+def _get(url: str, timeout: int = 20, headers: dict | None = None) -> str:
+    h = {"User-Agent": USER_AGENT}
+    if headers:
+        h.update(headers)
+    req = urllib.request.Request(url, headers=h)
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", errors="replace")
 
@@ -239,11 +245,56 @@ def fetch_globe(src: FundSource, start: date, end: date) -> list[tuple[date, flo
     return [(d, float(price))]
 
 
+BARCHART_EOD = (
+    "https://globeandmail.pl.barchart.com/proxies/timeseries/queryeod.ashx"
+)
+
+
+def fetch_barchart(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:
+    """Barchart end-of-day prices (the source behind Globe and Mail fund pages).
+
+    `identifier` is the symbol, e.g. MGF1916.CF. Returns full daily history, so
+    this backfills past dates as well. Response lines look like:
+
+        MGF1916.CF,2026-10-16,19.6878,19.6878,19.6878,19.6878,0
+        symbol,date,open,high,low,close,volume
+    """
+    # Barchart returns the most recent `maxrecords` rows; ask for enough to
+    # comfortably cover the requested window.
+    span_days = (end - start).days
+    maxrecords = max(250, int(span_days * 0.75) + 30)
+    url = (
+        f"{BARCHART_EOD}?symbol={urllib.parse.quote(src.identifier)}"
+        f"&data=daily&maxrecords={maxrecords}&order=desc"
+    )
+    text = _get(url, headers={"Referer": "https://www.theglobeandmail.com/"})
+    out: list[tuple[date, float]] = []
+    for line in text.splitlines():
+        parts = line.strip().split(",")
+        if len(parts) < 6:
+            continue
+        try:
+            d = date.fromisoformat(parts[1].strip())
+            close = float(parts[5])
+        except ValueError:
+            continue  # header or non-numeric row
+        if start <= d <= end:
+            out.append((d, close))
+    if not out:
+        raise ValueError(
+            f"Fund {src.fund}: no Barchart prices for '{src.identifier}' in "
+            f"{start.isoformat()}..{end.isoformat()}. Check the symbol."
+        )
+    out.sort()
+    return out
+
+
 ADAPTERS = {
     "yahoo": fetch_yahoo,
     "fidelity": fetch_fidelity,
     "manulife": fetch_manulife,
     "globe": fetch_globe,
+    "barchart": fetch_barchart,
     "html": fetch_html,
     "csv": fetch_csv,
 }

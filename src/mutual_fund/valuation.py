@@ -70,6 +70,7 @@ def compute_valuations(
     base_currency: str = "CAD",
     snapshot: list[SnapshotPosition] | None = None,
     strict: bool = False,
+    start: date | None = None,
 ) -> tuple[list[Valuation], list[str]]:
     """Value holdings over time.
 
@@ -77,6 +78,11 @@ def compute_valuations(
     snapshot date, using the units held there, plus any transactions dated
     after it. Without a snapshot, units are built by replaying all
     transactions from scratch.
+
+    `start` lets the series begin before the snapshot date. In that case the
+    snapshot's units are held constant for the earlier dates (buys/sells and
+    reinvested distributions before the snapshot are not reflected), and a
+    warning is emitted.
 
     Returns (valuations, warnings).
     """
@@ -101,16 +107,23 @@ def compute_valuations(
                 f"date ({baseline_date.isoformat()}) were ignored — they are "
                 "assumed to be included in the snapshot."
             )
-        value_dates = sorted({o[0] for o in navs if o[0] >= baseline_date})
+        window_start = start or baseline_date
+        if start and start < baseline_date:
+            warnings.append(
+                f"Dates before the snapshot ({baseline_date.isoformat()}) are "
+                "valued using the snapshot's units, held constant — buys/sells "
+                "and reinvested distributions before that date are not "
+                "reflected."
+            )
+        value_dates = sorted({o[0] for o in navs if o[0] >= window_start})
         if not value_dates:
             raise ValueError(
-                f"No NAV data on or after the snapshot date "
-                f"({baseline_date.isoformat()})."
+                f"No NAV data on or after {window_start.isoformat()}."
             )
     else:
         positions = defaultdict(float)
         pending = list(transactions)
-        value_dates = sorted({o[0] for o in navs})
+        value_dates = sorted({o[0] for o in navs if start is None or o[0] >= start})
 
     # Replay the remaining transactions chronologically across the dates.
     txns_by_date: dict[date, list[Transaction]] = defaultdict(list)

@@ -1,0 +1,6 @@
+date,fund,nav,currency
+# Pin a precise NAV for a (date, fund). Overrides win over nav.csv and survive
+# future `fetch-nav` runs — handy when a public feed only publishes a rounded
+# price (e.g. some TD funds publish 2 decimals).
+2026-10-16,TDB619,58.663,CAD
+2026-10-16,TDB2580,15.873,CAD
