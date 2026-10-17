@@ -69,6 +69,7 @@ def compute_valuations(
     fx: list[tuple[date, str, float]],
     base_currency: str = "CAD",
     snapshot: list[SnapshotPosition] | None = None,
+    strict: bool = False,
 ) -> tuple[list[Valuation], list[str]]:
     """Value holdings over time.
 
@@ -170,10 +171,14 @@ def compute_valuations(
             f"{', '.join(sorted(unknown_accounts))}"
         )
     if missing_nav:
-        raise ValueError(
+        msg = (
             f"No NAV on or before the valuation date for fund(s): "
-            f"{', '.join(sorted(missing_nav))}"
+            f"{', '.join(sorted(missing_nav))}. Those holdings are excluded "
+            "from the totals — add their prices (see funds.csv / fetch-nav)."
         )
+        if strict:
+            raise ValueError(msg)
+        warnings.append(msg)
 
     valuations.sort(key=lambda v: (v.date, v.account.account_id, v.fund))
     return valuations, warnings

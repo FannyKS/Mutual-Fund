@@ -64,7 +64,11 @@ def load_accounts(data_dir: Path) -> dict[str, Account]:
 
 
 def load_transactions(data_dir: Path) -> list[Transaction]:
-    rows = _read_csv(data_dir / "transactions.csv")
+    """Load transactions (optional; absent means no changes recorded yet)."""
+    path = data_dir / "transactions.csv"
+    if not path.exists():
+        return []
+    rows = _read_csv(path)
     txns = []
     for r in rows:
         txns.append(

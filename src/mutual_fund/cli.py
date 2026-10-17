@@ -35,14 +35,14 @@ from .valuation import compute_valuations, positions_as_of
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 
 
-def _load_and_value(data_dir: Path, base_currency: str):
+def _load_and_value(data_dir: Path, base_currency: str, strict: bool = False):
     accounts = load_accounts(data_dir)
     transactions = load_transactions(data_dir)
     navs = load_navs(data_dir)
     fx = load_fx(data_dir)
     snapshot = load_snapshot(data_dir)
     valuations, warnings = compute_valuations(
-        accounts, transactions, navs, fx, base_currency, snapshot
+        accounts, transactions, navs, fx, base_currency, snapshot, strict
     )
     return accounts, valuations, warnings
 
@@ -157,6 +157,11 @@ def main(argv: list[str] | None = None) -> int:
         default="CAD",
         help="Base currency for reports (default: CAD)",
     )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Fail instead of skipping funds that have no NAV",
+    )
     sub = parser.add_subparsers(dest="command")
 
     rep = sub.add_parser("report", help="Write daily/weekly/monthly CSV reports")
@@ -252,7 +257,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        accounts, valuations, warnings = _load_and_value(args.data, args.base)
+        accounts, valuations, warnings = _load_and_value(
+            args.data, args.base, args.strict
+        )
     except (FileNotFoundError, ValueError) as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1

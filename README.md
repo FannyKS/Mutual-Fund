@@ -6,15 +6,20 @@ See [SPECIFICATION.md](SPECIFICATION.md) for the full specification.
 
 ## What it does
 
-Tracks 7 accounts across 3 institutions — Fanny (TFSA, RRSP, Non-Reg) and
-KC (RRSP, TFSA) at Manulife, Joint (Non-Reg) at Carte, and TD (Non-Reg) at
-TD Bank. Computes market value of holdings over time (units × NAV × FX rate),
-and produces:
+Tracks 10 accounts across 3 institutions:
+
+**Manulife (8)** — Fanny: TFSA, RRSP, Spousal RRSP, Non-Reg; KC: RRSP,
+Spousal RRSP, LIRA, TFSA
+**Carte (1)** — Joint Non-Registered
+**TD Bank (1)** — TD Non-Registered
+
+Computes market value of holdings over time (units × NAV × FX rate), and
+produces:
 
 1. **Daily report**
 2. **Weekly report**
 3. **Monthly report**
-4. **Consolidated report** across all 7 accounts (with per-institution subtotals)
+4. **Consolidated report** across all accounts (with per-institution subtotals)
 
 Reports are CSV files written to `~/Documents/Mutual-Fund-Reports/`
 (outside `src/`, per the specification), plus an optional terminal summary.
@@ -31,8 +36,8 @@ pip install -e .
 
 | File | Columns | Notes |
 |---|---|---|
-| `accounts.csv` | `account_id,name,owner,type,institution,currency` | Your 7 accounts |
-| `transactions.csv` | `date,account_id,fund,action,units,price` | `action` = BUY/SELL |
+| `accounts.csv` | `account_id,name,owner,type,institution,currency` | Your accounts |
+| `transactions.csv` | `date,account_id,fund,action,units,price` | Changes only; optional |
 | `nav.csv` | `date,fund,nav,currency` | NAV per unit (auto-fetched, see below) |
 | `funds.csv` | `fund,name,currency,source,identifier,pattern` | Where each fund's NAV comes from |
 | `snapshot.csv` | `date,account_id,fund,units` | Holdings baseline (see workflow below) |
@@ -59,6 +64,20 @@ mutual-fund --base USD report
 ```
 
 Without installing: `PYTHONPATH=src python3 -m mutual_fund show`
+
+Add `--strict` to fail (instead of skipping) when a fund has no NAV yet.
+
+## Reading screenshots (OCR)
+
+Holdings often arrive as phone screenshots. `scripts/ocr.swift` extracts the
+text with the macOS Vision framework (no installs needed):
+
+```bash
+swift scripts/ocr.swift Holdings/Fanny/*.jpeg
+```
+
+Then transcribe fund code, units and NAV into `snapshot.csv` / `nav.csv`.
+(The `.xlsx` exports, like Carte's, can be read directly.)
 
 ## NAVs: automatic daily fetch
 

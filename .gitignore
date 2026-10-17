@@ -1,5 +1,6 @@
 # Your real financial data — keep out of the repo
 data/
+Holdings/
 
 # Generated reports (also written outside src by default)
 reports/
