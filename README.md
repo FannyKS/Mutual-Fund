@@ -162,6 +162,16 @@ It runs at 07:00 daily. Reports start at `MUTUAL_FUND_FROM` (default
 0 7 * * * MUTUAL_FUND_DATA=$HOME/src/Mutual-Fund/data /Users/fannyng/src/Mutual-Fund/scripts/daily.sh
 ```
 
+**If a run logs `Operation not permitted` for a file under `~/Documents`**:
+macOS ties a launchd job's write access to files the job created itself. Delete
+that file (or the whole `~/Documents/Mutual-Fund-Reports` directory) and run
+the job once more — let the job create the files. It works from then on, even
+if you later edit them by hand:
+
+```bash
+launchctl kickstart -k gui/$(id -u)/com.mutual-fund.daily
+```
+
 ## Workflow: snapshot + changes
 
 You send a **holdings snapshot** (what you hold today). After that, you only
