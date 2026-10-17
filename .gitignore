@@ -1,0 +1,13 @@
+# Your real financial data — keep out of the repo
+data/
+
+# Generated reports (also written outside src by default)
+reports/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store
