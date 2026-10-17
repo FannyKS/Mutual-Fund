@@ -123,6 +123,7 @@ def compute_valuations(
     valuations: list[Valuation] = []
     unknown_accounts: set[str] = set()
     missing_nav: set[str] = set()
+    missing_fx: set[str] = set()
 
     for d in value_dates:
         while ti < len(txn_dates) and txn_dates[ti] <= d:
@@ -147,10 +148,8 @@ def compute_valuations(
             else:
                 rate = fx_series.get(currency, d)
                 if rate is None:
-                    raise ValueError(
-                        f"No FX rate for {currency} on or before {d.isoformat()} "
-                        f"(fund {fund}). Add rows to fx.csv."
-                    )
+                    missing_fx.add(currency)
+                    continue
             account = accounts[acct_id]
             valuations.append(
                 Valuation(
@@ -175,6 +174,15 @@ def compute_valuations(
             f"No NAV on or before the valuation date for fund(s): "
             f"{', '.join(sorted(missing_nav))}. Those holdings are excluded "
             "from the totals — add their prices (see funds.csv / fetch-nav)."
+        )
+        if strict:
+            raise ValueError(msg)
+        warnings.append(msg)
+    if missing_fx:
+        msg = (
+            f"No FX rate to {base_currency} for: "
+            f"{', '.join(sorted(missing_fx))}. Holdings priced in those "
+            "currencies are excluded — run 'mutual-fund fetch-fx'."
         )
         if strict:
             raise ValueError(msg)

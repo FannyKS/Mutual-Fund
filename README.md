@@ -90,8 +90,8 @@ MIF001,Manulife Monthly High Income,CAD,yahoo,0P0000XXXX.TO,
 TDB900,TD Canadian Bond,CAD,html,https://example.com/td/tdb900,"\$([0-9]+\.[0-9]+)"
 ```
 
-Sources: `yahoo` (ticker), `html` (scrape a public fund page with a regex),
-`csv` (a public CSV URL). Then:
+Sources: `yahoo` (ticker), `fidelity` (Fidelity Canada fund code),
+`html` (scrape a public fund page with a regex), `csv` (a public CSV URL). Then:
 
 ```bash
 mutual-fund fetch-nav              # fetch the last year, merge into nav.csv
@@ -99,14 +99,23 @@ mutual-fund fetch-nav --since 2026-01-01
 mutual-fund fetch-nav --dry-run
 ```
 
+Foreign-currency funds are converted with rates from the Bank of Canada:
+
+```bash
+mutual-fund fetch-fx               # writes data/fx.csv (USD/CAD, EUR/CAD, ...)
+```
+
+`fetch-fx` defaults to the currencies used by `funds.csv`, so it only fetches
+what you actually need.
+
 Useful for back-filling history: `fetch-nav --since 2020-01-01` gives you
 daily NAVs going back years, so weekly/monthly reports cover past dates.
 (Your **holdings** still come from snapshots — those can't be fetched.)
 
 ## Daily automation
 
-`scripts/daily.sh` fetches NAVs, then writes the reports and logs to
-`~/Documents/Mutual-Fund-Reports/daily.log`. Run it each morning, after the
+`scripts/daily.sh` fetches NAVs and FX rates, then writes the reports and logs
+to `~/Documents/Mutual-Fund-Reports/daily.log`. Run it each morning, after the
 previous day's NAVs are published (mutual fund NAVs are final only after
 market close).
 

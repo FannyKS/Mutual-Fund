@@ -25,6 +25,7 @@ from .loader import (
     load_transactions,
 )
 from .navfetch import update_navs
+from .fxfetch import update_fx
 from .reports import (
     DEFAULT_OUTPUT_DIR,
     print_summary,
@@ -224,7 +225,41 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run", action="store_true", help="Fetch but do not write nav.csv"
     )
 
+    fxf = sub.add_parser(
+        "fetch-fx",
+        help="Fetch daily FX rates (Bank of Canada) into data/fx.csv",
+    )
+    fxf.add_argument(
+        "--currency",
+        action="append",
+        default=None,
+        help="Currency to fetch (repeatable). Default: those used by funds.csv",
+    )
+    fxf.add_argument("--since", type=date.fromisoformat, default=None)
+    fxf.add_argument("--until", type=date.fromisoformat, default=None)
+    fxf.add_argument("--overwrite", action="store_true")
+    fxf.add_argument("--dry-run", action="store_true")
+
     args = parser.parse_args(argv)
+
+    if args.command == "fetch-fx":
+        try:
+            added, errors = update_fx(
+                args.data,
+                args.currency,
+                args.since,
+                args.until,
+                overwrite=args.overwrite,
+                dry_run=args.dry_run,
+            )
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        for err in errors:
+            print(f"Warning: {err}", file=sys.stderr)
+        verb = "would add" if args.dry_run else "added"
+        print(f"FX fetch complete: {verb} {added} row(s).")
+        return 1 if errors and not added else 0
 
     if args.command == "fetch-nav":
         try:

@@ -9,10 +9,12 @@ source in data/funds.csv:
     TDB900,TD Canadian Bond,CAD,html,https://example.com/td-funds,"\\$([0-9.]+)"
 
 Supported sources:
-  yahoo  - Yahoo Finance chart API (works for many funds/ETFs by ticker)
-  html   - scrape a public fund page; `pattern` is a regex with one capture
-           group for the price
-  csv    - a public CSV URL; last numeric column is used as the NAV
+  yahoo     - Yahoo Finance chart API (works for many funds/ETFs by ticker)
+  fidelity  - Fidelity Canada's public fund data feed, by fund code
+              (e.g. 223 = Fidelity Dividend Plus Series B)
+  html      - scrape a public fund page; `pattern` is a regex with one capture
+              group for the price
+  csv       - a public CSV URL; last numeric column is used as the NAV
 """
 
 from __future__ import annotations
@@ -136,7 +138,54 @@ def fetch_csv(src: FundSource, start: date, end: date) -> list[tuple[date, float
     return out
 
 
-ADAPTERS = {"yahoo": fetch_yahoo, "html": fetch_html, "csv": fetch_csv}
+FIDELITY_URL = "https://www.fidelity.ca/content/fidelity-data/pnp-cached-en.json"
+_FIDELITY_CACHE: dict | None = None
+
+
+def _fidelity_feed() -> dict:
+    global _FIDELITY_CACHE
+    if _FIDELITY_CACHE is None:
+        _FIDELITY_CACHE = json.loads(_get(FIDELITY_URL))
+    return _FIDELITY_CACHE
+
+
+def fetch_fidelity(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:
+    """Fidelity Canada: look up a fund series by its code in the public feed.
+
+    The feed carries only the latest NAV per series, so this returns one
+    observation per fetch (accumulate daily historical data in nav.csv over
+    time). `identifier` is the fund code, e.g. 223 or 1241.
+    """
+    data = _fidelity_feed()
+    want = str(src.identifier).strip()
+    for fund in data.get("funds", []):
+        for series in fund.get("series", []):
+            for code in series.get("codes") or []:
+                if str(code.get("code")) != want:
+                    continue
+                nav = series.get("price_nav")
+                raw_date = series.get("price_nav_date")
+                if not nav or nav == "-" or not raw_date or raw_date == "-":
+                    raise ValueError(
+                        f"Fund {src.fund}: Fidelity series '{series.get('title')}' "
+                        f"(code {want}) has no NAV published yet."
+                    )
+                d = datetime.strptime(raw_date, "%d-%b-%Y").date()
+                if not (start <= d <= end):
+                    return []
+                return [(d, float(nav))]
+    raise ValueError(
+        f"Fund {src.fund}: Fidelity fund code '{want}' not found. "
+        "Check the code against your statement."
+    )
+
+
+ADAPTERS = {
+    "yahoo": fetch_yahoo,
+    "fidelity": fetch_fidelity,
+    "html": fetch_html,
+    "csv": fetch_csv,
+}
 
 
 def fetch(src: FundSource, start: date, end: date) -> list[tuple[date, float]]:

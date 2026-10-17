@@ -26,6 +26,7 @@ run() {
   # Fetching can fail (network hiccup, changed source page) — that should not
   # stop the report from being generated with the NAVs we already have.
   run fetch-nav || echo "fetch-nav failed (continuing with existing NAVs)"
+  run fetch-fx || echo "fetch-fx failed (continuing with existing rates)"
   run report --out "$LOG_DIR" || echo "report failed"
   echo
 } >> "$LOG_DIR/daily.log" 2>&1
