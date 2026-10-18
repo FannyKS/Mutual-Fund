@@ -38,7 +38,8 @@ a { color:var(--acc); }
 .card .k { color:var(--mut); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
 .card .v { font-size:24px; font-weight:650; margin-top:6px; }
 .card .d { color:var(--mut); font-size:12px; margin-top:4px; }
-.pos { color:var(--pos); } .neg { color:var(--neg); } .flat { color:var(--mut); }
+.chg .pos, .chg .neg, .chg .flat { color: var(--sub); }
+.chg { color: var(--sub); }
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:22px; }
 .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
 .panel h2 { font-size:14px; margin:0 0 14px; color:var(--mut); font-weight:600;
@@ -106,7 +107,7 @@ def _chg(v: float | None, pct: float | None = None) -> str:
     """Signed money (and optional %) as coloured HTML, or 'n/a'."""
     if v is None:
         return '<span class="muted">n/a</span>'
-    s = f'<span class="{_cls(v)}">{_smoney(v)}'
+    s = f'<span class="chg">{_smoney(v)}'
     if pct is not None:
         s += f" ({_pct(pct)})"
     return s + "</span>"
