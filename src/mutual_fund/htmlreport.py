@@ -38,8 +38,7 @@ a { color:var(--acc); }
 .card .k { color:var(--mut); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
 .card .v { font-size:24px; font-weight:650; margin-top:6px; }
 .card .d { color:var(--mut); font-size:12px; margin-top:4px; }
-.chg .pos, .chg .neg, .chg .flat { color: var(--sub); }
-.chg { color: var(--sub); }
+.chg-sub { color: var(--sub); font-weight: 600; }
 .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:22px; }
 .panel { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; }
 .panel h2 { font-size:14px; margin:0 0 14px; color:var(--mut); font-weight:600;
@@ -103,11 +102,12 @@ def _cls(v: float) -> str:
     return "pos" if v > 0 else ("neg" if v < 0 else "flat")
 
 
-def _chg(v: float | None, pct: float | None = None) -> str:
+def _chg(v: float | None, pct: float | None = None, subtotal: bool = False) -> str:
     """Signed money (and optional %) as coloured HTML, or 'n/a'."""
     if v is None:
         return '<span class="muted">n/a</span>'
-    s = f'<span class="chg">{_smoney(v)}'
+    cls = "chg-sub" if subtotal else _cls(v)
+    s = f'<span class="{cls}">{_smoney(v)}'
     if pct is not None:
         s += f" ({_pct(pct)})"
     return s + "</span>"
@@ -383,9 +383,9 @@ def _holdings_table(rows: list[dict], accounts: dict[str, Account], base_currenc
             f'<tr class="sub"><td class="l">{_esc(inst)} subtotal</td><td></td><td></td>'
             f'<td></td><td>{_money(inst_value)}</td>'
             f'<td>{(inst_value / (sum(x["value"] for x in rows) or 1)) * 100:.1f}%</td>'
-            f'<td>{_chg(inst_today if inst_value else None)}</td>'
+            f'<td>{_chg(inst_today if inst_value else None, subtotal=True)}</td>'
             f'<td>{_money(inst_cost) if inst_gain_known else "n/a"}</td>'
-            f'<td>{_chg(inst_gain)}</td></tr>'
+            f'<td>{_chg(inst_gain, subtotal=True)}</td></tr>'
         )
         for r in items:
             body.append(
@@ -613,7 +613,7 @@ def build_period_report(
         e = sum(acct_end[a] for a in aids)
         acc_rows.append(
             f'<tr class="sub"><td class="l">{_esc(inst)} subtotal</td>'
-            f'<td>{_money(s)}</td><td>{_money(e)}</td><td>{_chg(e - s)}</td></tr>'
+            f'<td>{_money(s)}</td><td>{_money(e)}</td><td>{_chg(e - s, subtotal=True)}</td></tr>'
         )
         for a in aids:
             acc_rows.append(
