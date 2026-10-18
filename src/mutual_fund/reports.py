@@ -117,6 +117,39 @@ def write_all_reports(
     return paths
 
 
+def write_value_log(
+    valuations: list[Valuation],
+    output_dir: Path,
+    base_currency: str = "CAD",
+) -> Path:
+    """Write a consolidated daily value log to value_log.csv.
+
+    Columns: date,market_value,today_change,gain_loss — one row per valuation
+    date (consolidated, in the base currency). It is regenerated each run from
+    the full series, so it stays de-duplicated by date and always reflects the
+    latest NAV history. `today_change` is blank for the first date (no prior
+    day to compare with); `gain_loss` is value minus cost where cost is known.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    path = output_dir / "value_log.csv"
+    agg: dict[date, list[float]] = {}
+    for v in valuations:
+        row = agg.setdefault(v.date, [0.0, 0.0])
+        row[0] += v.market_value
+        row[1] += v.cost or 0.0
+
+    with path.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["date", "market_value", "today_change", "gain_loss"])
+        prev: float | None = None
+        for d in sorted(agg):
+            value, cost = agg[d]
+            change = "" if prev is None else f"{value - prev:.2f}"
+            w.writerow([d.isoformat(), f"{value:.2f}", change, f"{value - cost:.2f}"])
+            prev = value
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Terminal output
 # ---------------------------------------------------------------------------

@@ -246,6 +246,21 @@ date,Fanny TFSA (F-TFSA),Fanny RRSP (F-RRSP),...,MANULIFE_TOTAL,...,CARTE_TOTAL,
 Weekly reports keep the last valuation date of each ISO week; monthly reports
 keep the last valuation date of each month.
 
+### Value log
+
+`report` also writes `value_log.csv` — a consolidated one-row-per-day log:
+
+```
+date,market_value,today_change,gain_loss
+2026-10-15,2446536.18,14571.80,586806.93
+2026-10-16,2437749.54,-8786.64,578020.29
+```
+
+It is regenerated from the full series on each run (so it stays de-duplicated
+by date and picks up any NAV back-fill), covering all accounts in the base
+currency. `today_change` is blank on the first date; `gain_loss` uses the cost
+basis where known.
+
 ### HTML output
 
 Alongside the CSVs, `report` writes a self-contained, dark-themed set of HTML

@@ -32,6 +32,7 @@ from .reports import (
     DEFAULT_OUTPUT_DIR,
     print_summary,
     write_all_reports,
+    write_value_log,
 )
 from .valuation import compute_valuations, positions_as_of
 
@@ -342,6 +343,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "report":
         paths = write_all_reports(valuations, accounts, args.out, args.base)
+        paths.append(write_value_log(valuations, args.out, args.base))
         if not args.no_html:
             fund_names = load_fund_names(args.data)
             transactions = load_transactions(args.data)
