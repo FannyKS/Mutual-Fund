@@ -25,7 +25,7 @@ _PALETTE = [
 
 CSS = """
 :root { --bg:#0f1420; --card:#171d2c; --line:#242c40; --txt:#e8ecf4; --mut:#8b97ad;
-        --pos:#3ddc84; --neg:#ff6b81; --acc:#4f8ef7; --flat:#8b97ad; }
+        --pos:#3ddc84; --neg:#ff6b81; --acc:#4f8ef7; --flat:#8b97ad; --sub:#ffd24a; }
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--txt);
        font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
@@ -66,7 +66,8 @@ th, td { padding:8px 10px; text-align:right; border-bottom:1px solid var(--line)
 th { color:var(--mut); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
 th:first-child, td:first-child { text-align:left; }
 th.l, td.l { text-align:left; }
-tr.sub td { color:var(--mut); font-weight:600; border-bottom:1px solid var(--line); }
+tr.sub td { color:var(--sub); font-weight:600; background:rgba(255,210,74,0.07);
+            border-bottom:1px solid var(--line); }
 tr.total td { font-weight:700; border-top:2px solid var(--line); border-bottom:none; }
 .muted { color:var(--mut); }
 .note { color:var(--mut); font-size:12px; margin-top:16px; }
