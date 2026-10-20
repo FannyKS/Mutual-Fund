@@ -12,6 +12,7 @@ from pathlib import Path
 class Account:
     account_id: str
     name: str
+    owner: str
     institution: str
     currency: str
 
@@ -64,9 +65,23 @@ def load_accounts(data_dir: Path) -> dict[str, Account]:
     rows = _read_csv(data_dir / "accounts.csv")
     accounts = {}
     for r in rows:
+        name = r["name"].strip()
+        owner = (r.get("owner") or "").strip()
+        if not owner:
+            if name.startswith("Fanny"):
+                owner = "Fanny"
+            elif name.startswith("KC"):
+                owner = "KC"
+            elif name.startswith("Joint"):
+                owner = "Joint"
+            elif name.startswith("TD"):
+                owner = "TD"
+            else:
+                owner = r["institution"].strip()
         acct = Account(
             account_id=r["account_id"].strip(),
-            name=r["name"].strip(),
+            name=name,
+            owner=owner,
             institution=r["institution"].strip(),
             currency=r["currency"].strip().upper(),
         )

@@ -374,6 +374,41 @@ def _holdings_table(rows: list[dict], accounts: dict[str, Account], base_currenc
     for r in rows:
         by_inst.setdefault(r["account"].institution, []).append(r)
     for inst, items in by_inst.items():
+        by_owner: dict[str, list[dict]] = defaultdict(list)
+        for i in items:
+            by_owner[i["account"].owner].append(i)
+        owner_order = sorted(by_owner.keys(), key=lambda o: (0 if o == "Fanny" else (1 if o == "KC" else 2), o))
+        total_all = sum(r["value"] for r in rows) or 1
+        show_owner_subtotals = len(by_owner) > 1
+        for owner in owner_order:
+            o_items = by_owner[owner]
+            if show_owner_subtotals:
+                o_value = sum(x["value"] for x in o_items)
+                o_today = sum(x["today"] for x in o_items if x["today"] is not None)
+                o_gain_known = all(x["cost"] is not None for x in o_items)
+                o_cost = sum(x["cost"] for x in o_items if x["cost"] is not None)
+                o_gain = (o_value - o_cost) if o_gain_known else None
+                body.append(
+                    f'<tr class="sub"><td class="l">{_esc(owner)} subtotal</td><td></td><td></td>'
+                    f'<td></td><td>{_money(o_value)}</td>'
+                    f'<td>{(o_value / total_all) * 100:.1f}%</td>'
+                    f'<td>{_chg(o_today if o_value else None, subtotal=True)}</td>'
+                    f'<td>{_money(o_cost) if o_gain_known else "n/a"}</td>'
+                    f'<td>{_chg(o_gain, subtotal=True) if o_gain is not None else "n/a"}</td></tr>'
+                )
+            for r in o_items:
+                body.append(
+                    f'<tr><td class="l">{_esc(r["account"].name)}'
+                    f'<div class="muted" style="font-size:11px">{_esc(r["fund_name"])}</div></td>'
+                    f'<td class="muted">{_esc(r["fund"])}</td>'
+                    f'<td>{r["units"]:,.4f}</td>'
+                    f'<td>{r["nav"]:,.4f}</td>'
+                    f'<td>{_money(r["value"])}</td>'
+                    f'<td>{r["weight"]:.1f}%</td>'
+                    f'<td>{_chg(r["today"], r["today_pct"])}</td>'
+                    f'<td>{_money(r["cost"]) if r["cost"] is not None else "n/a"}</td>'
+                    f'<td>{_chg(r["gain"], r["gain_pct"]) if r["gain"] is not None else "n/a"}</td></tr>'
+                )
         inst_value = sum(i["value"] for i in items)
         inst_today = sum(i["today"] for i in items if i["today"] is not None)
         inst_gain_known = all(i["cost"] is not None for i in items)
@@ -382,24 +417,11 @@ def _holdings_table(rows: list[dict], accounts: dict[str, Account], base_currenc
         body.append(
             f'<tr class="sub"><td class="l">{_esc(inst)} subtotal</td><td></td><td></td>'
             f'<td></td><td>{_money(inst_value)}</td>'
-            f'<td>{(inst_value / (sum(x["value"] for x in rows) or 1)) * 100:.1f}%</td>'
+            f'<td>{(inst_value / total_all) * 100:.1f}%</td>'
             f'<td>{_chg(inst_today if inst_value else None, subtotal=True)}</td>'
             f'<td>{_money(inst_cost) if inst_gain_known else "n/a"}</td>'
             f'<td>{_chg(inst_gain, subtotal=True)}</td></tr>'
         )
-        for r in items:
-            body.append(
-                f'<tr><td class="l">{_esc(r["account"].name)}'
-                f'<div class="muted" style="font-size:11px">{_esc(r["fund_name"])}</div></td>'
-                f'<td class="muted">{_esc(r["fund"])}</td>'
-                f'<td>{r["units"]:,.4f}</td>'
-                f'<td>{r["nav"]:,.4f}</td>'
-                f'<td>{_money(r["value"])}</td>'
-                f'<td>{r["weight"]:.1f}%</td>'
-                f'<td>{_chg(r["today"], r["today_pct"])}</td>'
-                f'<td>{_money(r["cost"]) if r["cost"] is not None else "n/a"}</td>'
-                f'<td>{_chg(r["gain"], r["gain_pct"])}</td></tr>'
-            )
     total = sum(r["value"] for r in rows)
     total_today = sum(r["today"] for r in rows if r["today"] is not None)
     known = [r for r in rows if r["cost"] is not None]
@@ -609,18 +631,32 @@ def build_period_report(
     for aid, a in accounts.items():
         by_inst[a.institution].append(aid)
     for inst, aids in by_inst.items():
+        by_owner: dict[str, list[str]] = defaultdict(list)
+        for a in aids:
+            by_owner[accounts[a].owner].append(a)
+        show_owner_subtotals = len(by_owner) > 1
+        owner_order = sorted(by_owner.keys(), key=lambda o: (0 if o == "Fanny" else (1 if o == "KC" else 2), o))
+        for owner in owner_order:
+            o_aids = by_owner[owner]
+            if show_owner_subtotals:
+                s_o = sum(acct_start[a] for a in o_aids)
+                e_o = sum(acct_end[a] for a in o_aids)
+                acc_rows.append(
+                    f'<tr class="sub"><td class="l">{_esc(owner)} subtotal</td>'
+                    f'<td>{_money(s_o)}</td><td>{_money(e_o)}</td><td>{_chg(e_o - s_o, subtotal=True)}</td></tr>'
+                )
+            for a in sorted(o_aids):
+                acc_rows.append(
+                    f'<tr><td class="l">{_esc(accounts[a].name)} ({_esc(a)})</td>'
+                    f'<td>{_money(acct_start[a])}</td><td>{_money(acct_end[a])}</td>'
+                    f'<td>{_chg(acct_end[a] - acct_start[a])}</td></tr>'
+                )
         s = sum(acct_start[a] for a in aids)
         e = sum(acct_end[a] for a in aids)
         acc_rows.append(
             f'<tr class="sub"><td class="l">{_esc(inst)} subtotal</td>'
             f'<td>{_money(s)}</td><td>{_money(e)}</td><td>{_chg(e - s, subtotal=True)}</td></tr>'
         )
-        for a in aids:
-            acc_rows.append(
-                f'<tr><td class="l">{_esc(accounts[a].name)} ({_esc(a)})</td>'
-                f'<td>{_money(acct_start[a])}</td><td>{_money(acct_end[a])}</td>'
-                f'<td>{_chg(acct_end[a] - acct_start[a])}</td></tr>'
-            )
     acc_rows.append(
         f'<tr class="total"><td class="l">CONSOLIDATED</td><td>{_money(start_value)}</td>'
         f'<td>{_money(end_value)}</td><td>{_chg(change)}</td></tr>'
