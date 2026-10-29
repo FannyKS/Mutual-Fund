@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import csv
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-from .loader import Account
+from .loader import Account, Transaction
 from .valuation import Valuation
 
 DEFAULT_OUTPUT_DIR = Path.home() / "Documents" / "Mutual-Fund-Reports"
@@ -45,6 +46,106 @@ def resample(
             raise ValueError(f"Unknown period: {period}")
         buckets[key] = d  # last date seen in the bucket wins
     return {buckets[k]: totals[buckets[k]] for k in sorted(buckets)}
+
+
+def _bucket_key(d: date, period: str) -> date:
+    if period == "weekly":
+        return _last_date_of_iso_week(d)
+    if period == "monthly":
+        return d.replace(day=1)
+    raise ValueError(f"Unknown period: {period}")
+
+
+@dataclass(frozen=True)
+class PeriodSummary:
+    """One row of the weekly/monthly summary report."""
+
+    label: str
+    start: date
+    end: date
+    value: float
+    change: float | None       # period-end value minus previous period-end value
+    change_pct: float | None
+    contributions: float       # net new money during the period
+    market: float | None       # change minus contributions
+    cost: float                # cost basis at period end
+    gain: float | None         # value minus cost
+    gain_pct: float | None
+
+
+def _period_label(key: date, start: date, end: date, period: str) -> str:
+    if period == "weekly":
+        week = key.isocalendar()[1]
+        return f"W{week:02d} ({start.strftime('%b %d')} - {end.strftime('%b %d')})"
+    return key.strftime("%B %Y")
+
+
+def period_summaries(
+    valuations: list[Valuation],
+    transactions: list[Transaction],
+    period: str,
+) -> list[PeriodSummary]:
+    """Summarise every week/month: period total plus comparison vs the previous one.
+
+    `change` is the period-end value minus the *previous* period-end value, so
+    the first period has no comparison. `gain` compares the period-end value
+    with the cost basis (ACB) held at that date.
+    """
+    value: dict[date, float] = defaultdict(float)
+    cost: dict[date, float] = defaultdict(float)
+    for v in valuations:
+        value[v.date] += v.market_value
+        cost[v.date] += v.cost or 0.0
+
+    buckets: dict[date, list[date]] = defaultdict(list)
+    for d in sorted(value):
+        buckets[_bucket_key(d, period)].append(d)
+
+    out: list[PeriodSummary] = []
+    prev_value: float | None = None
+    prev_end: date | None = None
+    for key in sorted(buckets):
+        dates = sorted(buckets[key])
+        start, end = dates[0], dates[-1]
+        val = value[end]
+        cst = cost[end]
+
+        # Net new money inside this period (between the previous period end and
+        # this one, so weekend transactions are not lost).
+        lo = prev_end if prev_end is not None else start
+        contributions = sum(
+            t.units * t.price * (1.0 if t.action == "BUY" else -1.0)
+            for t in transactions
+            if lo < t.date <= end
+        )
+
+        change = None if prev_value is None else val - prev_value
+        change_pct = (
+            change / prev_value * 100.0
+            if (change is not None and prev_value)
+            else None
+        )
+        market = None if change is None else change - contributions
+        gain = val - cst
+        gain_pct = (gain / cst * 100.0) if cst else None
+
+        out.append(
+            PeriodSummary(
+                label=_period_label(key, start, end, period),
+                start=start,
+                end=end,
+                value=val,
+                change=change,
+                change_pct=change_pct,
+                contributions=contributions,
+                market=market,
+                cost=cst,
+                gain=gain,
+                gain_pct=gain_pct,
+            )
+        )
+        prev_value, prev_end = val, end
+    return out
 
 
 def consolidate(
@@ -114,6 +215,57 @@ def write_all_reports(
                 base_currency,
             )
         )
+    return paths
+
+
+def write_summary_csvs(
+    valuations: list[Valuation],
+    transactions: list[Transaction],
+    output_dir: Path,
+    base_currency: str = "CAD",
+) -> list[Path]:
+    """Write weekly_summary.csv and monthly_summary.csv.
+
+    One row per week/month: the period total and its comparison with the
+    previous period, plus the gain/loss against the cost basis.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    header = [
+        "period",
+        "start",
+        "end",
+        f"market_value_{base_currency}",
+        "change",
+        "change_pct",
+        "contributions",
+        "market_movement",
+        "cost",
+        "gain_loss",
+        "gain_loss_pct",
+    ]
+    paths = []
+    for period in ("weekly", "monthly"):
+        path = output_dir / f"{period}_summary.csv"
+        with path.open("w", newline="", encoding="utf-8") as f:
+            w = csv.writer(f)
+            w.writerow(header)
+            for s in period_summaries(valuations, transactions, period):
+                w.writerow(
+                    [
+                        s.label,
+                        s.start.isoformat(),
+                        s.end.isoformat(),
+                        f"{s.value:.2f}",
+                        "" if s.change is None else f"{s.change:.2f}",
+                        "" if s.change_pct is None else f"{s.change_pct:.2f}",
+                        f"{s.contributions:.2f}",
+                        "" if s.market is None else f"{s.market:.2f}",
+                        f"{s.cost:.2f}",
+                        "" if s.gain is None else f"{s.gain:.2f}",
+                        "" if s.gain_pct is None else f"{s.gain_pct:.2f}",
+                    ]
+                )
+        paths.append(path)
     return paths
 
 

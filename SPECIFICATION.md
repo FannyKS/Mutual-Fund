@@ -64,6 +64,10 @@ Reports on each account, plus a consolidated report across all accounts:
 2. Weekly report
 3. Monthly report
 4. Consolidated report (all 10 accounts)
+5. Weekly summary — one row per week: fund total plus comparison with the
+   previous week (change, %, contributions vs market movement) and gain/loss
+   against cost
+6. Monthly summary — the same, one row per month
 
 Each is written as **CSV** and as a self-contained **HTML** page; an HTML
 **dashboard** (`dashboard.html`) gives the at-a-glance view (cards, allocation

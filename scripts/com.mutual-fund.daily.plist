@@ -31,6 +31,14 @@
     <integer>0</integer>
   </dict>
 
+  <!-- Report window start. Set this to your portfolio inception date so every
+       run compares from the same baseline (default in daily.sh: 2026-01-01). -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>MUTUAL_FUND_FROM</key>
+    <string>2026-10-17</string>
+  </dict>
+
   <key>StandardOutPath</key>
   <string>/tmp/mutual-fund-daily.out</string>
   <key>StandardErrorPath</key>

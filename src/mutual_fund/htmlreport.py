@@ -705,6 +705,172 @@ def build_period_report(
     return _page(f"{title} Fund Report", header + cards + acc_table + fund_table + day_table)
 
 
+# ---------------------------------------------------------------------------
+# summary reports (one row per week / per month)
+# ---------------------------------------------------------------------------
+
+def _period_summaries(
+    valuations: list[Valuation],
+    transactions: list[Transaction],
+    period: str,
+):
+    from .reports import period_summaries
+
+    return period_summaries(valuations, transactions, period)
+
+
+def build_summary_report(
+    valuations: list[Valuation],
+    transactions: list[Transaction],
+    period: str,
+    base_currency: str = "CAD",
+) -> str:
+    """Weekly/monthly summary: every period's total plus its comparison."""
+    title = {"weekly": "Weekly", "monthly": "Monthly"}[period]
+    unit = "week" if period == "weekly" else "month"
+    summaries = _period_summaries(valuations, transactions, period)
+
+    if not summaries:
+        return _page(
+            f"{title} Summary",
+            f'<h1>{title} Summary</h1><div class="sub">No data yet.</div>',
+        )
+
+    latest = summaries[-1]
+    first = summaries[0]
+    has_contrib = any(abs(s.contributions) > 0.005 for s in summaries)
+
+    header = (
+        f'<h1>{title} Summary</h1>'
+        f'<div class="sub">{_esc(first.start.isoformat())} to '
+        f'{_esc(latest.end.isoformat())} &middot; base currency '
+        f'{_esc(base_currency)} &middot; '
+        f'<a href="dashboard.html">dashboard</a> &middot; '
+        f'<a href="{period}_report.html">{period} report</a></div>'
+    )
+
+    cards = (
+        '<div class="cards">'
+        f'<div class="card"><div class="k">Latest {unit}</div>'
+        f'<div class="v">{_money(latest.value)}</div>'
+        f'<div class="d">{_esc(latest.label)} &middot; {latest.end.isoformat()}</div></div>'
+        f'<div class="card"><div class="k">Change vs prior {unit}</div>'
+        f'<div class="v {_cls(latest.change) if latest.change is not None else "flat"}">'
+        f'{_smoney(latest.change) if latest.change is not None else "&mdash;"}'
+        f'<span style="font-size:12px" class="muted"> '
+        f'{_pct(latest.change_pct) if latest.change_pct is not None else ""}</span></div>'
+        f'<div class="d">'
+        + (
+            f'market {_smoney(latest.market)}'
+            if latest.market is not None
+            else "no prior period"
+        )
+        + "</div></div>"
+        f'<div class="card"><div class="k">Gain / loss</div>'
+        f'<div class="v {_cls(latest.gain) if latest.gain is not None else "flat"}">'
+        f'{_smoney(latest.gain) if latest.gain is not None else "&mdash;"}'
+        f'<span style="font-size:12px" class="muted"> '
+        f'{_pct(latest.gain_pct) if latest.gain_pct is not None else ""}</span></div>'
+        f'<div class="d">vs cost {_money(latest.cost)}</div></div>'
+        f'<div class="card"><div class="k">Periods</div>'
+        f'<div class="v">{len(summaries)}</div>'
+        f'<div class="d">since {first.start.isoformat()}</div></div>'
+        "</div>"
+    )
+
+    # table: newest first, so the most recent comparison is at the top
+    head = (
+        '<tr><th class="l">Period</th><th>Value</th><th>Change</th>'
+        "<th>Change %</th>"
+    )
+    if has_contrib:
+        head += "<th>Contributions</th><th>Market</th>"
+    head += "<th>Gain / loss</th><th>Gain %</th></tr>"
+
+    rows = []
+    for s in reversed(summaries):
+        change = (
+            '<span class="muted">&mdash;</span>'
+            if s.change is None
+            else _chg(s.change)
+        )
+        change_pct = (
+            '<span class="muted">&mdash;</span>'
+            if s.change_pct is None
+            else f'<span class="{_cls(s.change_pct)}">{_pct(s.change_pct)}</span>'
+        )
+        gain_pct = (
+            '<span class="muted">&mdash;</span>'
+            if s.gain_pct is None
+            else f'<span class="{_cls(s.gain_pct)}">{_pct(s.gain_pct)}</span>'
+        )
+        cells = (
+            f'<tr><td class="l">{_esc(s.label)}'
+            f'<div class="muted" style="font-size:11px">'
+            f'{s.start.isoformat()} to {s.end.isoformat()}</div></td>'
+            f'<td>{_money(s.value)}</td>'
+            f'<td>{change}</td>'
+            f'<td>{change_pct}</td>'
+        )
+        if has_contrib:
+            market = (
+                f'<span class="{_cls(s.market)}">{_smoney(s.market)}</span>'
+                if s.market is not None
+                else '<span class="muted">&mdash;</span>'
+            )
+            cells += f'<td>{_smoney(s.contributions)}</td><td>{market}</td>'
+        cells += (
+            f'<td>{_chg(s.gain) if s.gain is not None else "&mdash;"}</td>'
+            f"<td>{gain_pct}</td></tr>"
+        )
+        rows.append(cells)
+
+    table = (
+        f'<div class="panel" style="margin-bottom:22px"><h2>By {unit}</h2>'
+        f"<table>{head}{''.join(rows)}</table></div>"
+    )
+
+    points = [(s.end, s.value) for s in summaries]
+    chart = (
+        '<div class="panel"><h2>Value by ' + unit + '</h2>'
+        + (
+            _line_svg(points)
+            if len(points) > 1
+            else '<div class="muted">Need at least two periods to chart.</div>'
+        )
+        + "</div>"
+    )
+
+    note = ""
+    if latest.change is None:
+        note = (
+            '<div class="note">Change is the period total minus the previous '
+            'period total, so the first period has no comparison yet.</div>'
+        )
+
+    return _page(
+        f"{title} Summary", header + cards + table + chart + note
+    )
+
+
+def write_summary_reports(
+    valuations: list[Valuation],
+    transactions: list[Transaction],
+    output_dir: Path,
+    base_currency: str = "CAD",
+) -> list[Path]:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for period in ("weekly", "monthly"):
+        path = output_dir / f"{period}_summary.html"
+        path.write_text(
+            build_summary_report(valuations, transactions, period, base_currency),
+            encoding="utf-8",
+        )
+        paths.append(path)
+    return paths
+
+
 def write_period_reports(
     valuations: list[Valuation],
     accounts: dict[str, Account],

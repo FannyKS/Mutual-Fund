@@ -27,11 +27,12 @@ from .loader import (
 )
 from .navfetch import update_navs
 from .fxfetch import update_fx
-from .htmlreport import write_dashboard, write_period_reports
+from .htmlreport import write_dashboard, write_period_reports, write_summary_reports
 from .reports import (
     DEFAULT_OUTPUT_DIR,
     print_summary,
     write_all_reports,
+    write_summary_csvs,
     write_value_log,
 )
 from .valuation import compute_valuations, positions_as_of
@@ -342,17 +343,25 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.command == "report":
+        transactions = load_transactions(args.data)
         paths = write_all_reports(valuations, accounts, args.out, args.base)
         paths.append(write_value_log(valuations, args.out, args.base))
+        paths.extend(
+            write_summary_csvs(valuations, transactions, args.out, args.base)
+        )
         if not args.no_html:
             fund_names = load_fund_names(args.data)
-            transactions = load_transactions(args.data)
             paths.append(
                 write_dashboard(valuations, accounts, fund_names, args.out, args.base)
             )
             paths.extend(
                 write_period_reports(
                     valuations, accounts, fund_names, transactions, args.out, args.base
+                )
+            )
+            paths.extend(
+                write_summary_reports(
+                    valuations, transactions, args.out, args.base
                 )
             )
         print(f"Reports written to {args.out}:\n")

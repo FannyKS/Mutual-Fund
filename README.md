@@ -24,9 +24,11 @@ produces:
    bars, value-history chart, holdings table with gain/loss)
 
 Reports are written to `~/Documents/Mutual-Fund-Reports/` (outside `src/`, per
-the specification): the four reports as CSV, plus `dashboard.html` and an HTML
+the specification): the four reports as CSV, plus `dashboard.html`, an HTML
 version of each period report (`daily_report.html`, `weekly_report.html`,
-`monthly_report.html`). A terminal summary is also printed.
+`monthly_report.html`), and two multi-period summaries
+(`weekly_summary.html`, `monthly_summary.html`). A terminal summary is also
+printed.
 
 When a statement reports a **cost basis (ACB / book value)**, holdings also
 show **gain/loss** and a **Cost (ACB)** total. Accounts without a cost basis
@@ -261,6 +263,28 @@ by date and picks up any NAV back-fill), covering all accounts in the base
 currency. `today_change` is blank on the first date; `gain_loss` uses the cost
 basis where known.
 
+### Weekly and monthly summaries
+
+`weekly_summary.csv` / `monthly_summary.csv` have **one row per week/month**
+covering the whole report window, so periods can be compared side by side:
+
+```
+period,start,end,market_value_CAD,change,change_pct,contributions,market_movement,cost,gain_loss,gain_loss_pct
+W43 (Oct 19 - Oct 23),2026-10-19,2026-10-23,2422219.52,,,0.00,,1859729.25,562490.27,30.25
+W44 (Oct 26 - Oct 28),2026-10-26,2026-10-28,2442857.61,20638.09,0.85,0.00,20638.09,1859729.25,583128.36,31.36
+```
+
+- `market_value_<currency>` — the fund total at the end of that period.
+- `change` / `change_pct` — end-of-period total minus the **previous**
+  period's total (blank for the first period).
+- `contributions` — net buys/sells during the period; `market_movement` is
+  `change` minus contributions.
+- `gain_loss` / `gain_loss_pct` — the period-end total minus the cost basis.
+
+Unlike `weekly_report.csv` (current week-to-date only), the summaries keep
+every period in the report window. The window follows `--from`; with the
+launchd job it is pinned to your inception date via `MUTUAL_FUND_FROM`.
+
 ### HTML output
 
 Alongside the CSVs, `report` writes a self-contained, dark-themed set of HTML
@@ -272,6 +296,8 @@ files (no external assets, so they open anywhere):
 | `daily_report.html` | Latest day: start/end value, change, split into contributions vs market movement, by account, by fund, daily rows |
 | `weekly_report.html` | Current week-to-date, same layout |
 | `monthly_report.html` | Current month-to-date, same layout |
+| `weekly_summary.html` | Every week in the window: total, change vs prior week, % and gain/loss vs cost, plus a value-by-week chart |
+| `monthly_summary.html` | Every month in the window, same layout |
 
 "Contributions" is the net of recorded buys/sells in the period; the rest of
 the change is labelled "market". Use `--no-html` to skip these files.
